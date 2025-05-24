@@ -12,3 +12,21 @@
 
 ### Location Manager
 * Integrate with Google's "find my device" feature to show location of everyone on a map
+
+```mermaid
+---
+title: Aggregates, Entities and Value Objects
+---
+
+flowchart TD
+
+  M-->Did
+  D-->Mid
+  D-->A
+
+    M[Member]
+    D[Document]
+    Mid[MemberId]
+    Did[DocumentId]
+    A[Alert]
+```
