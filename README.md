@@ -13,6 +13,9 @@
 ### Location Manager
 * Integrate with Google's "find my device" feature to show location of everyone on a map
 
+### Car Manager
+* Diary of mechanic visits and history
+
 ```mermaid
 ---
 title: Aggregates, Entities and Value Objects
