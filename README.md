@@ -16,6 +16,10 @@
 ### Car Manager
 * Diary of mechanic visits and history
 
+### Receipt Manager
+* Upload and store receipts. Possibly parsing info such as vendor name, date, and amount from
+the receipt image
+
 ```mermaid
 ---
 title: Aggregates, Entities and Value Objects
