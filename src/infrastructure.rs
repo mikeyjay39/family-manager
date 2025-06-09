@@ -1,1 +1,1 @@
-pub mod infrastructure;
+pub mod document_collection;

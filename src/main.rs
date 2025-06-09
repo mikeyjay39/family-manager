@@ -1,6 +1,8 @@
-use axum::{Router, routing::get};
-use domain::document::Document;
+mod application;
 mod domain;
+mod infrastructure;
+use crate::domain::document::Document;
+use axum::{Router, routing::get};
 use std::net::SocketAddr;
 use tokio;
 
