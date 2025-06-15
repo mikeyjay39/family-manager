@@ -2,7 +2,11 @@ mod application;
 mod domain;
 mod infrastructure;
 use crate::domain::document::Document;
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{get, post},
+};
+use infrastructure::document_handler::create_document;
 use std::net::SocketAddr;
 use tokio;
 
@@ -12,7 +16,8 @@ async fn main() {
     let app = Router::new()
         .route("/", get(handler))
         .route("/foo", get(|| async { "Hello, Foo!" }))
-        .route("/bar", get(|| async { String::from("Hello, Bar!") }));
+        .route("/bar", get(|| async { String::from("Hello, Bar!") }))
+        .route("/documents", post(create_document));
 
     // Define the address to run the server on
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));

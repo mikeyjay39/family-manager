@@ -1,6 +1,9 @@
 // This will contain the code for the 'domain::document' module
 
 // Example struct for a document
+use serde::Serialize;
+
+#[derive(Serialize)]
 pub struct Document {
     pub id: u32,
     pub title: String,
