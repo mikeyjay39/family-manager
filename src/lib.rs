@@ -2,22 +2,29 @@ mod application;
 mod domain;
 mod infrastructure;
 use crate::domain::document::Document;
+use application::application::DocumentRepository;
 use axum::{
     Router,
     routing::{get, post},
 };
-use infrastructure::document_handler::create_document;
+use infrastructure::{
+    app_state::AppState, document_collection::DocumentCollection, document_handler::create_document,
+};
 use std::net::SocketAddr;
-use tokio;
+use std::sync::Arc;
 
 #[tokio::main]
 pub async fn start_server() {
     // Build our application with a single route
+    let state: Arc<AppState<DocumentCollection>> = Arc::new(AppState {
+        document_repository: Arc::new(tokio::sync::Mutex::new(DocumentCollection::new())),
+    });
     let app = Router::new()
         .route("/", get(handler))
         .route("/foo", get(|| async { "Hello, Foo!" }))
         .route("/bar", get(|| async { String::from("Hello, Bar!") }))
-        .route("/documents", post(create_document));
+        .route("/documents", post(create_document))
+        .with_state(state);
 
     // Define the address to run the server on
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
