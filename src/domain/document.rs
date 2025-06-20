@@ -1,7 +1,9 @@
 // Example struct for a document
 use serde::Serialize;
+use serde::Deserialize;
 
-#[derive(Serialize, Clone, Debug)]
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Document {
     pub id: u32,
     pub title: String,

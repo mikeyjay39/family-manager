@@ -8,7 +8,9 @@ use axum::{
     routing::{get, post},
 };
 use infrastructure::{
-    app_state::AppState, document_collection::DocumentCollection, document_handler::create_document,
+    app_state::AppState,
+    document_collection::DocumentCollection,
+    document_handler::{create_document, get_document},
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -24,6 +26,7 @@ pub async fn start_server() {
         .route("/foo", get(|| async { "Hello, Foo!" }))
         .route("/bar", get(|| async { String::from("Hello, Bar!") }))
         .route("/documents", post(create_document))
+        .route("/documents/:id", get(get_document))
         .with_state(state);
 
     // Define the address to run the server on
