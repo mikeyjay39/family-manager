@@ -1,13 +1,13 @@
 // Example struct for a document
-use serde::Serialize;
 use serde::Deserialize;
-
+use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Document {
     pub id: u32,
     pub title: String,
     pub content: String,
+    pub tags: Vec<String>,
 }
 
 impl Document {
@@ -17,6 +17,7 @@ impl Document {
             id,
             title: title.to_string(),
             content: String::from(content),
+            tags: vec![],
         }
     }
 
@@ -46,6 +47,7 @@ mod tests {
         assert_eq!(doc.id, 1);
         assert_eq!(doc.title, "Test Document");
         assert_eq!(doc.content, "This is a test content.");
+        assert!(doc.tags.is_empty());
     }
 
     #[test]
