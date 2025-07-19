@@ -6,6 +6,7 @@ use hyper::body::to_bytes;
 use serde::Deserialize;
 
 use super::app_state::AppState;
+use super::document_dto::DocumentDto;
 use std::sync::Arc;
 
 #[derive(Deserialize)]
@@ -18,13 +19,13 @@ pub struct CreateDocumentCommand {
 pub async fn create_document<T: DocumentRepository>(
     State(state): State<Arc<AppState<T>>>,
     Json(payload): Json<CreateDocumentCommand>,
-) -> (StatusCode, Json<Document>) {
+) -> (StatusCode, Json<DocumentDto>) {
     let document = Document::new(payload.id, &payload.title, &payload.content);
     document.print_details();
 
     let mut repo = state.document_repository.lock().await;
     repo.save_document(document.clone());
-    let json_response = Json(document);
+    let json_response = Json(DocumentDto::from_document(&document));
     (StatusCode::CREATED, json_response)
 }
 
