@@ -1,4 +1,3 @@
-// Example struct for a document
 use serde::Deserialize;
 use serde::Serialize;
 
