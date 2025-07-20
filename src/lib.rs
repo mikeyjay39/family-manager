@@ -10,7 +10,7 @@ use axum::{
 use infrastructure::{
     app_state::AppState,
     document_collection::DocumentCollection,
-    document_handler::{create_document, get_document},
+    document_handler::{create_document, get_document, upload},
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -27,6 +27,7 @@ pub async fn start_server() {
         .route("/bar", get(|| async { String::from("Hello, Bar!") }))
         .route("/documents", post(create_document))
         .route("/documents/:id", get(get_document))
+        .route("/upload", post(upload)) // TODO: Remove this after testing
         .with_state(state);
 
     // Define the address to run the server on

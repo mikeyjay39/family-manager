@@ -1,8 +1,7 @@
 use crate::{application::application::DocumentRepository, domain::document::Document};
-use axum::extract::{Path, State};
+use axum::extract::{Multipart, Path, State};
 use axum::response::IntoResponse;
 use axum::{Json, http::StatusCode};
-use hyper::body::to_bytes;
 use serde::Deserialize;
 
 use super::app_state::AppState;
@@ -19,7 +18,15 @@ pub struct CreateDocumentCommand {
 pub async fn create_document<T: DocumentRepository>(
     State(state): State<Arc<AppState<T>>>,
     Json(payload): Json<CreateDocumentCommand>,
+    // Multipart(multipart): Multipart,
 ) -> (StatusCode, Json<DocumentDto>) {
+    // TODO: Continue looking into how to add a multipart file upload here with json payload
+    // let mut file_data = Vec::new();
+    // while let Some(mut field) = multipart.next_field().await.unwrap() {
+    //     while let Some(chunk) = field.chunk().await.unwrap() {
+    //         file_data.extend_from_slice(&chunk);
+    //     }
+    // }
     let document = Document::new(payload.id, &payload.title, &payload.content);
     document.print_details();
 
@@ -41,6 +48,18 @@ pub async fn get_document<T: DocumentRepository>(
     }
 }
 
+/*
+* TODO: Remove this. It is for testing only
+* */
+pub async fn upload(mut multipart: Multipart) {
+    while let Some(mut field) = multipart.next_field().await.unwrap() {
+        let name = field.name().unwrap().to_string();
+        let data = field.bytes().await.unwrap();
+
+        println!("Length of `{}` is {} bytes", name, data.len());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::infrastructure::document_collection::DocumentCollection;
@@ -48,6 +67,7 @@ mod tests {
     use super::*;
     use axum::Json;
     use axum::http::StatusCode;
+    use hyper::body::to_bytes;
 
     #[tokio::test]
     async fn test_create_document() {
