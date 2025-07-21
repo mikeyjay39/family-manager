@@ -18,9 +18,9 @@ pub struct CreateDocumentCommand {
 
 pub async fn create_document(
     State(state): State<Arc<AppState<DocumentCollection>>>,
-    // Json(payload): Json<CreateDocumentCommand>,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
+    println!("Received multipart form data");
     // TODO: Continue looking into how to add a multipart file upload here with json payload
     let mut json_data: Option<CreateDocumentCommand> = None;
 
@@ -31,29 +31,24 @@ pub async fn create_document(
                 json_data = serde_json::from_str(&text).ok();
             }
             Some("file") => {
-                let data = field.bytes().await.unwrap();
+                let _data = field.bytes().await.unwrap();
                 let mut file_data = Vec::new();
                 while let Some(mut field) = multipart.next_field().await.unwrap() {
                     while let Some(chunk) = field.chunk().await.unwrap() {
                         file_data.extend_from_slice(&chunk);
                     }
                 }
-
-                // let mut file = File::create("upload.bin").await.unwrap();
-                // file.write_all(&data).await.unwrap();
             }
             _ => {}
         }
     }
 
     if let Some(payload) = json_data {
-        // print!(format!("Received JSON: {}", payload));
         let document = Document::new(payload.id, &payload.title, &payload.content);
         document.print_details();
 
         let mut repo = state.document_repository.lock().await;
         repo.save_document(document.clone());
-        // let json_response = Json(DocumentDto::from_document(&document));
         (
             StatusCode::CREATED,
             Json(serde_json::json!(DocumentDto::from_document(&document))),
@@ -61,20 +56,6 @@ pub async fn create_document(
     } else {
         (StatusCode::NOT_FOUND, Json(serde_json::json!({})))
     }
-
-    // let mut file_data = Vec::new();
-    // while let Some(mut field) = multipart.next_field().await.unwrap() {
-    //     while let Some(chunk) = field.chunk().await.unwrap() {
-    //         file_data.extend_from_slice(&chunk);
-    //     }
-    // }
-    // let document = Document::new(payload.id, &payload.title, &payload.content);
-    // document.print_details();
-    //
-    // let mut repo = state.document_repository.lock().await;
-    // repo.save_document(document.clone());
-    // let json_response = Json(DocumentDto::from_document(&document));
-    // (StatusCode::CREATED, json_response)
 }
 
 pub async fn get_document<T: DocumentRepository>(

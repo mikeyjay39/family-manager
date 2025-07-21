@@ -9,14 +9,6 @@ cargo run
 ## Example API calls
 
 ```bash
-curl --location 'http://127.0.0.1:3000/documents' \
---header 'Content-Type: application/json' \
---data '{
-    "id": 1,
-    "title": "Testing",
-    "content": "test content"
-}'
-
 curl --location 'http://127.0.0.1:3000/documents/1'
 ```
 
