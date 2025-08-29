@@ -12,6 +12,32 @@ cargo run
 curl --location 'http://127.0.0.1:3000/documents/1'
 ```
 
+## Installation
+
+### Diesel
+
+See this tutorial: https://docs.yugabyte.com/preview/drivers-orms/rust/diesel/
+
+Install the Diesel command-line interface for PostgreSQL:
+
+```bash
+cargo install diesel_cli --no-default-features --features postgres
+```
+
+Next, tell Diesel where to find your database. In the project's main directory, create a file called .env with the following content:
+
+```bash
+DATABASE_URL=postgres://yugabyte:yugabyte@localhost:5433/ysql_diesel
+```
+
+Execute the following command to finish setting up the project:
+
+```bash
+diesel setup
+```
+
+This creates an empty migrations directory that you can use to manage your schema. It also creates the ysql_diesel database.
+
 ## Planned Features
 
 #### Document Manager
