@@ -9,8 +9,8 @@ use auth::AuthUser;
 use axum::extract::{Multipart, Path, Query, State};
 use axum::response::IntoResponse;
 use axum::{Json, http::StatusCode};
-use backend_utils::app_result::ApiResult;
 use backend_utils::AppResponse;
+use backend_utils::app_result::ApiResult;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -104,15 +104,12 @@ pub async fn get_document(
     }: AuthUser,
     State(DocumentState(document_use_cases)): State<DocumentState>,
     Path(id): Path<Uuid>,
-) -> impl IntoResponse {
+) -> ApiResult<DocumentDto> {
     tracing::info!("Fetching document with ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
     match repo.get_document(id).await {
-        Some(document) => (
-            StatusCode::OK,
-            Json(json!(DocumentDto::from_document(&document))),
-        ),
-        None => (StatusCode::NOT_FOUND, Json(json!({}))),
+        Some(document) => AppResponse::ok(DocumentDto::from_document(&document)),
+        None => AppResponse::not_found(),
     }
 }
 
@@ -143,7 +140,7 @@ pub async fn get_documents_by_title(
     }: AuthUser,
     State(DocumentState(document_use_cases)): State<DocumentState>,
     Query(params): Query<GetDocumentsQueryParams>,
-) -> impl IntoResponse {
+) -> ApiResult<Vec<DocumentDto>> {
     let title = params.title.unwrap_or_else(|| "".to_string());
     tracing::info!(
         "Fetching documents for user: {} with title cursor: {}",
@@ -155,7 +152,7 @@ pub async fn get_documents_by_title(
     let documents = query.execute().await;
     let document_dtos: Vec<DocumentDto> =
         documents.iter().map(DocumentDto::from_document).collect();
-    (StatusCode::OK, Json(json!(document_dtos)))
+    AppResponse::ok(document_dtos)
 }
 
 /*

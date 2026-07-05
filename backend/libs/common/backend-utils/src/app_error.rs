@@ -26,9 +26,9 @@ struct ErrorResponse {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, error_type, message) = match &self {
+        let (status, error_type, message) = match self {
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found", self.to_string()),
-            AppError::Validation(msg) => (StatusCode::BAD_REQUEST, "validation_error", msg.clone()),
+            AppError::Validation(msg) => (StatusCode::BAD_REQUEST, "validation_error", msg),
             AppError::Internal(_) => {
                 tracing::error!("Internal server error: {:?}", self);
                 (
@@ -67,6 +67,9 @@ mod tests {
 
     use super::*;
 
+    /**
+     * Helper function to extract JSON from an axum Response for testing purposes.
+     */
     async fn response_json(response: Response) -> Value {
         let body = response.into_body();
         let bytes = to_bytes(body, usize::MAX)
@@ -115,10 +118,7 @@ mod tests {
         assert_eq!(json["error"], "internal_error");
         assert_eq!(json["message"], "An internal error occurred");
         assert!(
-            !json["message"]
-                .as_str()
-                .unwrap()
-                .contains("database"),
+            !json["message"].as_str().unwrap().contains("database"),
             "internal error message must not leak underlying details"
         );
     }
