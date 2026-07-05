@@ -10,7 +10,7 @@ use axum::extract::{Multipart, Path, Query, State};
 use axum::response::IntoResponse;
 use axum::{Json, http::StatusCode};
 use backend_utils::app_result::ApiResult;
-use backend_utils::{AppError, AppResponse};
+use backend_utils::AppResponse;
 use serde_json::json;
 use uuid::Uuid;
 

@@ -33,7 +33,7 @@ pub async fn login(
             login_result.tenant,
             auth_state.use_cases.tenant
         );
-        return (AppResponse::unauthorized());
+        return AppResponse::unauthorized();
     }
 
     let exp = OffsetDateTime::now_utc() + Duration::hours(1);

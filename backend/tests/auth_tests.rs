@@ -6,7 +6,7 @@ use crate::common::setup::{
     decode_token_user_id, run_test_with_test_profile, run_test_with_test_profile_and_db_setup,
 };
 use axum_test::TestServer;
-use reqwest::{ClientBuilder, Error, Response};
+use reqwest::{ClientBuilder, Error, Response, StatusCode};
 use serial_test::serial;
 use tracing_test::traced_test;
 use uuid::Uuid;
@@ -47,16 +47,7 @@ async fn bad_credentials_fail_login() {
             Err(e) => panic!("Failed to send request: {}", e),
         };
         tracing::info!("Response: {:?}", res);
-        assert!(
-            res.status().is_client_error(),
-            "Response status was not a 4xx: {}",
-            res.error_for_status().unwrap_err()
-        );
-        let login_response: String = res.text().await.unwrap_or_else(|e| {
-            panic!("Failed to read response text: {}", e);
-        });
-        // response should not contain a token
-        assert_eq!(login_response.len(), 0);
+        assert_unauthorized_login_response(res).await;
     })
     .await;
 }
@@ -105,15 +96,7 @@ async fn unknown_username_fail_login() {
             Err(e) => panic!("Failed to send request: {}", e),
         };
         tracing::info!("Response: {:?}", res);
-        assert!(
-            res.status().is_client_error(),
-            "Response status was not a 4xx: {}",
-            res.error_for_status().unwrap_err()
-        );
-        let login_response: String = res.text().await.unwrap_or_else(|e| {
-            panic!("Failed to read response text: {}", e);
-        });
-        assert_eq!(login_response.len(), 0);
+        assert_unauthorized_login_response(res).await;
     })
     .await;
 }
@@ -180,15 +163,7 @@ async fn inactive_user_fail_login() {
                 Ok(response) => response,
                 Err(e) => panic!("Failed to send request: {}", e),
             };
-            assert!(
-                res.status().is_client_error(),
-                "Response status was not a 4xx: {}",
-                res.error_for_status().unwrap_err()
-            );
-            let login_response: String = res.text().await.unwrap_or_else(|e| {
-                panic!("Failed to read response text: {}", e);
-            });
-            assert_eq!(login_response.len(), 0);
+            assert_unauthorized_login_response(res).await;
         },
     )
     .await;
@@ -214,18 +189,31 @@ async fn wrong_tenant_principal_fail_login() {
                 Ok(response) => response,
                 Err(e) => panic!("Failed to send request: {}", e),
             };
-            assert!(
-                res.status().is_client_error(),
-                "Response status was not a 4xx: {}",
-                res.error_for_status().unwrap_err()
-            );
-            let login_response: String = res.text().await.unwrap_or_else(|e| {
-                panic!("Failed to read response text: {}", e);
-            });
-            assert_eq!(login_response.len(), 0);
+            assert_unauthorized_login_response(res).await;
         },
     )
     .await;
+}
+
+async fn assert_unauthorized_login_response(res: Response) {
+    assert_eq!(
+        res.status(),
+        StatusCode::UNAUTHORIZED,
+        "expected 401 Unauthorized, got {}",
+        res.status()
+    );
+
+    let body: serde_json::Value = res
+        .json()
+        .await
+        .expect("failed login response should be JSON");
+
+    assert_eq!(body["error"], "unauthorized");
+    assert_eq!(body["message"], "Unauthorized");
+    assert!(
+        body.get("token").is_none(),
+        "error response must not contain a token"
+    );
 }
 
 async fn do_login(server: &TestServer, username: &str, password: &str) -> Result<Response, Error> {
