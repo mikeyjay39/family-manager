@@ -22,6 +22,13 @@ npm run lint   # if frontend changed
 cargo test --lib --workspace --manifest-path backend/Cargo.toml
 ```
 
+**TypeScript DTO export** (CI also checks generated output is committed):
+
+```bash
+./backend/scripts/export_ts_bindings.sh
+git diff --exit-code -- frontend/lib/api/generated/
+```
+
 **Backend integration** (Docker via testcontainers — `backend/tests/common/`):
 
 ```bash

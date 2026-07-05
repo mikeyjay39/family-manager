@@ -5,18 +5,20 @@ edition = "2024"
 
 [dependencies]
 argon2 = { workspace = true }
-password-hash = { version = "0.5", features = ["getrandom"] }
 async-trait = { workspace = true }
 axum = { workspace = true }
+backend-utils = { path = "../common/backend-utils" }
 chrono = { version = "0.4", features = ["serde"] }
 deadpool-diesel = { version = "0.6", features = ["sqlite"] }
-diesel_migrations = "2"
 diesel = { version = "2.2.0", features = ["sqlite", "chrono", "uuid", "returning_clauses_for_sqlite_3_35"] }
-libsqlite3-sys = { version = "0.35", features = ["bundled"] }
+diesel_migrations = "2"
 jsonwebtoken = { workspace = true }
+libsqlite3-sys = { version = "0.35", features = ["bundled"] }
+password-hash = { version = "0.5", features = ["getrandom"] }
 serde = { workspace = true }
 time = { workspace = true }
 tracing = { workspace = true }
+ts-rs = { workspace = true }
 uuid = { workspace = true }
 zeroize = { workspace = true }
 

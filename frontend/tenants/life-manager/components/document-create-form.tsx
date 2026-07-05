@@ -4,6 +4,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import type { DocumentPickerAsset } from 'expo-document-picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api/client';
+import type { CreateDocumentCommand, DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
 
 function parseTags(input: string): string[] {
@@ -124,13 +125,11 @@ export default function DocumentCreateForm() {
     }
 
     const tags = parseTags(tagsInput);
-    const payload: Record<string, unknown> = {
+    const payload: CreateDocumentCommand = {
       title: title.trim(),
       content: content.trim(),
+      tags,
     };
-    if (tags.length > 0) {
-      payload.tags = tags;
-    }
 
     const jsonString = JSON.stringify(payload);
     const formData = new FormData();
@@ -168,7 +167,7 @@ export default function DocumentCreateForm() {
 
       let message = 'Document created successfully.';
       try {
-        const data = JSON.parse(bodyText) as { id?: string; title?: string };
+        const data = JSON.parse(bodyText) as DocumentDto;
         if (data.id) {
           message = `Created document "${data.title ?? title.trim()}" (${data.id}).`;
         }

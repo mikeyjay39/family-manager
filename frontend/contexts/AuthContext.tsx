@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { getStoredToken, setStoredToken, clearStoredToken } from '@/lib/auth/storage';
 import { apiFetch } from '@/lib/api/client';
+import type { LoginRequest, LoginResponse } from '@/lib/api/types';
 import { useTenant } from '@/lib/tenant/TenantContext';
 
 type AuthContextType = {
@@ -67,12 +68,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string): Promise<LoginResult> => {
     try {
+      const body: LoginRequest = { username, password };
       const response = await apiFetch('/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(body),
       });
 
       if (response.status === 401) {
@@ -89,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as LoginResponse;
       const newToken = data.token;
 
       await setStoredToken(tenant.id, newToken);

@@ -15,7 +15,8 @@ Update this file and the hub when frontend conventions change.
 | `contexts/` | `AuthContext` (tenant-scoped token + login) |
 | `lib/tenant/` | Tenant registry, resolution, `TenantProvider`, `useTenant()` |
 | `lib/tenant/theme/` | Theme types, defaults, `mergeTenantTheme()`, `TenantThemeProvider` |
-| `lib/api/` | `client.ts` — `apiFetch`, `authenticatedFetch`, `apiV1` |
+| `lib/api/` | `client.ts` — `apiFetch`, `authenticatedFetch`, `apiV1`; `types.ts` — generated API DTOs |
+| `lib/api/generated/` | ts-rs output from Rust — **do not hand-edit** (see `generated/README.md`) |
 | `tenants/<id>/` | Tenant-owned screens, components, and `config.ts` |
 | `constants/` | `theme.ts` — `defaultColors` / `Fonts`; `config.ts` — `API_BASE_URL` |
 
@@ -62,6 +63,7 @@ Tests: wrap UI under test with `TenantThemeTestProvider` + `defaultResolvedTheme
 - Build API paths with `apiV1('/documents')` from `@/lib/api/client` — prefix comes from the active tenant via `configureApiClient`
 - Do not hard-code `/life-manager` or `/api/v1` in components
 - `authenticatedFetch` from `@/lib/api/client` — not raw `fetch` with hard-coded hosts
+- API DTO types: import from `@/lib/api/types` (generated from Rust via ts-rs)
 - `useAuth()` from `@/contexts/AuthContext`; 401/403 → `handleUnauthorized`
 - JWT tokens are stored per tenant (`auth_token:<tenant-id>`)
 

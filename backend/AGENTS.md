@@ -60,6 +60,25 @@ New features: `domain` / `application` first, then `infrastructure/<feature>/` (
 - Public v1 paths: `/life-manager/api/v1/...` — see [../docs/agents/api.md](../docs/agents/api.md)
 - Per feature: `*_router.rs`, `*_handler.rs`, `*_state.rs` (handler state via `FromRef<LifeManagerState>`)
 
+## TypeScript DTO codegen (ts-rs)
+
+Rust is the source of truth for **HTTP contract types** (request/response DTOs). Annotate those structs with `#[derive(TS)]` and `#[ts(export, export_to = "...")]`, then export via `export_typescript_bindings` tests.
+
+| Crate | Annotated types | Output |
+|-------|-----------------|--------|
+| `auth` | `LoginRequest`, `LoginResponse` in `domain/login_request.rs` | `frontend/lib/api/generated/auth/` |
+| `life-manager` | `DocumentDto`, `CreateDocumentCommand`, `GetDocumentsQueryParams` in `infrastructure/document/` | `frontend/lib/api/generated/life-manager/` |
+
+**Do not** export domain aggregates (e.g. `Document` with `user_id`) or server-only types (e.g. JWT `Claims`).
+
+Regenerate and commit TypeScript after changing API structs:
+
+```bash
+./backend/scripts/export_ts_bindings.sh
+```
+
+CI runs the same export tests and fails if `frontend/lib/api/generated/` is stale.
+
 ## Diesel / SQLite
 
 - Bundled SQLite (`libsqlite3-sys`); `DATABASE_URL` from `.<profile>.env` at the repo root

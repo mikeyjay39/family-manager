@@ -1,10 +1,15 @@
 use serde::Deserialize;
 use serde::Serialize;
+use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::domain::document::Document;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(
+    export,
+    export_to = "../../../../frontend/lib/api/generated/life-manager/DocumentDto.ts"
+)]
 pub struct DocumentDto {
     pub id: Uuid,
     pub title: String,
@@ -39,5 +44,10 @@ mod tests {
         assert_eq!(dto.title, "Test Document");
         assert_eq!(dto.content, "This is a test content.");
         assert!(dto.tags.is_empty());
+    }
+
+    #[test]
+    fn export_typescript_bindings() {
+        DocumentDto::export().unwrap();
     }
 }

@@ -1,4 +1,6 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{Json, extract::State};
+use backend_utils::app_result::ApiResult;
+use backend_utils::{AppError, AppResponse};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use time::{Duration, OffsetDateTime};
 
@@ -15,7 +17,7 @@ use crate::domain::jwt_secret::JWT_SECRET;
 pub async fn login(
     State(auth_state): State<AuthState>,
     Json(req): Json<LoginRequest>,
-) -> Result<Json<LoginResponse>, StatusCode> {
+) -> ApiResult<LoginResponse> {
     tracing::info!("Login attempt for user: {}", req.username);
 
     let login_result = auth_state
@@ -23,7 +25,7 @@ pub async fn login(
         .login_service
         .login(&req)
         .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+        .map_err(|_| AppError::Unauthorized)?;
 
     if login_result.tenant != auth_state.use_cases.tenant {
         tracing::warn!(
@@ -31,7 +33,7 @@ pub async fn login(
             login_result.tenant,
             auth_state.use_cases.tenant
         );
-        return Err(StatusCode::UNAUTHORIZED);
+        return AppResponse::unauthorized();
     }
 
     let exp = OffsetDateTime::now_utc() + Duration::hours(1);
@@ -47,9 +49,9 @@ pub async fn login(
         &claims,
         &EncodingKey::from_secret(&JWT_SECRET),
     )
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| AppError::Internal(e.into()))?;
 
-    Ok(Json(LoginResponse { token }))
+    AppResponse::ok(LoginResponse { token })
 }
 
 #[cfg(test)]
@@ -100,7 +102,7 @@ mod tests {
             .expect("Login should succeed");
 
         let claims = decode::<Claims>(
-            &response.token,
+            &response.data.token,
             &DecodingKey::from_secret(&JWT_SECRET),
             &Validation::default(),
         )
@@ -126,7 +128,7 @@ mod tests {
         let result = login(State(auth_state), Json(req)).await;
 
         // Then
-        assert_eq!(result.err(), Some(StatusCode::UNAUTHORIZED));
+        assert!(matches!(result, Err(AppError::Unauthorized)));
     }
 
     #[tokio::test]
@@ -148,6 +150,6 @@ mod tests {
         let result = login(State(auth_state), Json(req)).await;
 
         // Then
-        assert_eq!(result.err(), Some(StatusCode::UNAUTHORIZED));
+        assert!(matches!(result, Err(AppError::Unauthorized)));
     }
 }

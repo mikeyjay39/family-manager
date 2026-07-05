@@ -10,21 +10,26 @@ import {
 } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { authenticatedFetch } from '@/lib/api/client';
+import type { DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
 
-type DocumentRow = {
-  id: string;
-  title: string;
-  content: string;
-};
+export function parseDocumentDto(item: unknown): DocumentDto {
+  const d = item as Record<string, unknown>;
+  return {
+    id: String(d.id ?? ''),
+    title: String(d.title ?? ''),
+    content: String(d.content ?? ''),
+    tags: Array.isArray(d.tags) ? d.tags.map(String) : [],
+  };
+}
 
 export default function DocumentList() {
   const { token, handleUnauthorized } = useAuth();
   const palette = useColorPalette();
-  const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [documents, setDocuments] = useState<DocumentDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<DocumentRow | null>(null);
+  const [selected, setSelected] = useState<DocumentDto | null>(null);
 
   const styles = useMemo(
     () =>
@@ -143,14 +148,7 @@ export default function DocumentList() {
       if (!Array.isArray(data)) {
         throw new Error('Invalid response: expected a list of documents.');
       }
-      const rows: DocumentRow[] = data.map((item) => {
-        const d = item as Record<string, unknown>;
-        return {
-          id: String(d.id ?? ''),
-          title: String(d.title ?? ''),
-          content: String(d.content ?? ''),
-        };
-      });
+      const rows: DocumentDto[] = data.map(parseDocumentDto);
       setDocuments(rows);
     } catch (err: unknown) {
       console.error(err);

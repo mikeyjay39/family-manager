@@ -4,7 +4,7 @@ use std::fs;
 
 use axum_test::TestServer;
 use life_manager::infrastructure::document::{
-    document_dto::DocumentDto, document_handler::CreateDocumentCommand,
+    document_api_types::CreateDocumentCommand, document_dto::DocumentDto,
 };
 use reqwest::multipart::{Form, Part};
 use serial_test::serial;
@@ -14,6 +14,7 @@ use crate::common::setup::{
     build_auth_header, run_test_with_all_containers, run_test_with_test_profile,
 };
 use reqwest::ClientBuilder;
+use reqwest::StatusCode;
 use std::time::Duration;
 
 const DOCUMENTS_URL: &str = "/life-manager/api/v1/documents";
@@ -30,6 +31,7 @@ async fn create_and_get_document_docker_compose() {
         let payload = CreateDocumentCommand {
             title: String::from("Integration Test Document"),
             content: String::from("This is a test content."),
+            tags: vec![],
         };
 
         let json_string = serde_json::to_string(&payload).unwrap();
@@ -120,6 +122,7 @@ async fn create_and_get_document() {
         let payload = CreateDocumentCommand {
             title: String::from("Integration Test Document"),
             content: String::from("This is a test content."),
+            tags: vec![],
         };
 
         let json_string = serde_json::to_string(&payload).unwrap();
@@ -210,6 +213,7 @@ async fn create_and_get_document_no_file() {
         let payload = CreateDocumentCommand {
             title: String::from("Integration Test Document"),
             content: String::from("This is a test content."),
+            tags: vec![],
         };
         // Make REST API call to create a document
         let json_string = serde_json::to_string(&payload).unwrap();
@@ -259,6 +263,41 @@ async fn create_and_get_document_no_file() {
         let document: DocumentDto = get_response.json().await.unwrap();
         assert_eq!(document.title, payload.title);
         assert_eq!(document.content, payload.content);
+        assert!(document.tags.is_empty());
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+#[traced_test]
+async fn given_multipart_without_json_when_creating_document_then_returns_validation_error() {
+    run_test_with_test_profile(|server: TestServer| async move {
+        // Given
+        let auth_header = build_auth_header(&server).await;
+        let multipart_body = "--boundary\r\n\
+            Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+            Content-Type: text/plain\r\n\r\n\
+            This is test content.\r\n\
+            --boundary--";
+
+        let url = server
+            .server_url(DOCUMENTS_URL)
+            .expect("Failed to get server URL")
+            .to_string();
+
+        // When
+        let res = reqwest::Client::new()
+            .post(&url)
+            .body(multipart_body)
+            .header("Content-Type", "multipart/form-data; boundary=boundary")
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+
+        // Then
+        assert_validation_error_response(res).await;
     })
     .await;
 }
@@ -275,14 +314,17 @@ async fn get_all_documents() {
             CreateDocumentCommand {
                 title: String::from("First Document"),
                 content: String::from("Content of first document"),
+                tags: vec![],
             },
             CreateDocumentCommand {
                 title: String::from("Second Document"),
                 content: String::from("Content of second document"),
+                tags: vec![],
             },
             CreateDocumentCommand {
                 title: String::from("Third Document"),
                 content: String::from("Content of third document"),
+                tags: vec![],
             },
         ];
 
@@ -401,4 +443,24 @@ async fn get_all_documents() {
         );
     })
     .await;
+}
+
+async fn assert_validation_error_response(res: reqwest::Response) {
+    assert_eq!(
+        res.status(),
+        StatusCode::BAD_REQUEST,
+        "expected 400 Bad Request, got {}",
+        res.status()
+    );
+
+    let body: serde_json::Value = res
+        .json()
+        .await
+        .expect("validation error response should be JSON");
+
+    assert_eq!(body["error"], "validation_error");
+    assert_eq!(
+        body["message"],
+        "No valid JSON data found in the multipart form"
+    );
 }

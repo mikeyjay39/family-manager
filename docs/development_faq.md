@@ -18,6 +18,16 @@ cargo test --test '*'
 cargo test --lib
 ```
 
+### TypeScript DTO export (ts-rs)
+
+After changing Rust API DTOs (`LoginRequest`, `DocumentDto`, `CreateDocumentCommand`, etc.):
+
+```bash
+./backend/scripts/export_ts_bindings.sh
+```
+
+Commit the updated files under `frontend/lib/api/generated/` with the Rust changes.
+
 ## Secrets and Encryption
 See [git-crypt](https://github.com/AGWA/git-crypt?tab=readme-ov-file#using-git-crypt)
 

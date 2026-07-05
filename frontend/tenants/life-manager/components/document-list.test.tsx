@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import DocumentList from './document-list';
+import DocumentList, { parseDocumentDto } from './document-list';
 import { useAuth } from '@/contexts/AuthContext';
 import { authenticatedFetch } from '@/lib/api/client';
 import { TenantThemeTestProvider } from '@/lib/tenant/TenantThemeContext';
@@ -102,5 +102,23 @@ describe('DocumentList', () => {
     fireEvent.press(screen.getByLabelText('Open document Doc A'));
     expect(screen.getByText('Body text')).toBeTruthy();
     fireEvent.press(screen.getByText('Close'));
+  });
+});
+
+describe('parseDocumentDto', () => {
+  it('defaults tags to an empty array when missing', () => {
+    expect(parseDocumentDto({ id: '1', title: 'Alpha', content: 'c1' }).tags).toEqual([]);
+  });
+
+  it('maps tags when present', () => {
+    expect(
+      parseDocumentDto({ id: '1', title: 'Alpha', content: 'c1', tags: ['tax', '2024'] }).tags
+    ).toEqual(['tax', '2024']);
+  });
+
+  it('defaults tags to an empty array when tags is not an array', () => {
+    expect(
+      parseDocumentDto({ id: '1', title: 'Alpha', content: 'c1', tags: 'not-an-array' }).tags
+    ).toEqual([]);
   });
 });

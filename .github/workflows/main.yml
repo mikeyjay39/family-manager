@@ -57,6 +57,11 @@ jobs:
 
       - name: Run Unit Tests
         run: cargo test --lib --workspace --manifest-path backend/Cargo.toml
+
+      - name: Verify TypeScript DTO bindings are up to date
+        run: |
+          cargo test export_typescript_bindings --workspace --manifest-path backend/Cargo.toml
+          git diff --exit-code -- frontend/lib/api/generated/
   integration-tests:
     runs-on: ubuntu-latest
 
