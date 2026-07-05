@@ -13,7 +13,7 @@ import { authenticatedFetch } from '@/lib/api/client';
 import type { DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
 
-function parseDocumentDto(item: unknown): DocumentDto {
+export function parseDocumentDto(item: unknown): DocumentDto {
   const d = item as Record<string, unknown>;
   return {
     id: String(d.id ?? ''),

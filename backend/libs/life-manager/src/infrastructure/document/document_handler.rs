@@ -213,6 +213,47 @@ mod tests {
         }
     }
 
+    struct MockFailingDocumentTextReader;
+
+    #[async_trait]
+    impl DocumentTextReader for MockFailingDocumentTextReader {
+        async fn read_image(
+            &self,
+            _uploaded_document_input: &UploadedDocumentInput,
+        ) -> Result<String, Box<dyn Error>> {
+            Err(Box::new(std::io::Error::other("read failed")))
+        }
+    }
+
+    struct MockFailingDocumentRepository;
+
+    #[async_trait]
+    impl DocumentRepository for MockFailingDocumentRepository {
+        async fn get_document(&self, _id: Uuid) -> Option<Document> {
+            None
+        }
+
+        async fn get_documents(&self, _user_id: &Uuid, _limit: &u32) -> Vec<Document> {
+            Vec::new()
+        }
+
+        async fn get_documents_title_cursor(
+            &self,
+            _user_id: &Uuid,
+            _limit: &u32,
+            _title: &str,
+        ) -> Vec<Document> {
+            Vec::new()
+        }
+
+        async fn save_document(
+            &self,
+            _document: Document,
+        ) -> Result<Document, Box<dyn std::error::Error>> {
+            Err(Box::new(std::io::Error::other("save failed")))
+        }
+    }
+
     struct GivenUserAndDocuments {
         pub auth_user: AuthUser,
         pub document_use_cases: Arc<DocumentUseCases>,
@@ -292,6 +333,105 @@ mod tests {
         assert_eq!(response_document.title, "Test Document");
         assert_eq!(response_document.content, "This is test content.");
         assert!(!response_document.id.is_nil());
+    }
+
+    #[tokio::test]
+    async fn given_multipart_without_json_when_creating_document_then_returns_validation_error() {
+        // Given
+        let document_use_cases = Arc::new(DocumentUseCases {
+            document_repository: Arc::new(DocumentCollection::new()),
+            reader: Arc::new(MockDocumentTextReader {}),
+            summarizer: Arc::new(MockDocumentSummarizer {}),
+        });
+        let multipart = multipart_from_parts(None, true).await;
+
+        // When
+        let response = create_document(
+            test_auth_user(),
+            State(DocumentState(document_use_cases)),
+            multipart,
+        )
+        .await
+        .into_response();
+
+        // Then
+        assert_api_error_response(
+            response,
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "No valid JSON data found in the multipart form",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn given_from_file_failure_when_creating_document_then_returns_internal_error() {
+        // Given
+        let payload = CreateDocumentCommand {
+            title: String::from("Test Document"),
+            content: String::from("This is test content."),
+            tags: vec![],
+        };
+        let document_use_cases = Arc::new(DocumentUseCases {
+            document_repository: Arc::new(DocumentCollection::new()),
+            reader: Arc::new(MockFailingDocumentTextReader {}),
+            summarizer: Arc::new(MockDocumentSummarizer {}),
+        });
+        let multipart =
+            multipart_from_parts(Some(&serde_json::to_string(&payload).unwrap()), true).await;
+
+        // When
+        let response = create_document(
+            test_auth_user(),
+            State(DocumentState(document_use_cases)),
+            multipart,
+        )
+        .await
+        .into_response();
+
+        // Then
+        assert_api_error_response(
+            response,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+            "An internal error occurred",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn given_save_failure_when_creating_document_then_returns_internal_error() {
+        // Given
+        let payload = CreateDocumentCommand {
+            title: String::from("Test Document"),
+            content: String::from("This is test content."),
+            tags: vec![],
+        };
+        let document_use_cases = Arc::new(DocumentUseCases {
+            document_repository: Arc::new(MockFailingDocumentRepository {}),
+            reader: Arc::new(MockDocumentTextReader {}),
+            summarizer: Arc::new(MockDocumentSummarizer {}),
+        });
+        let multipart =
+            multipart_from_parts(Some(&serde_json::to_string(&payload).unwrap()), false).await;
+
+        // When
+        let response = create_document(
+            test_auth_user(),
+            State(DocumentState(document_use_cases)),
+            multipart,
+        )
+        .await
+        .into_response();
+
+        // Then
+        assert_api_error_response(
+            response,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+            "An internal error occurred",
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -475,5 +615,59 @@ mod tests {
             status_code,
             response_payload,
         }
+    }
+
+    fn test_auth_user() -> AuthUser {
+        AuthUser {
+            user_id: Uuid::new_v4(),
+            tenant: "test-tenant".to_string(),
+        }
+    }
+
+    fn build_multipart_body(json: Option<&str>, include_file: bool) -> String {
+        let mut multipart_body = String::new();
+        if let Some(json_string) = json {
+            multipart_body.push_str(&format!(
+                "--boundary\r\n\
+            Content-Disposition: form-data; name=\"json\"\r\n\
+            Content-Type: application/json\r\n\r\n\
+            {}\r\n",
+                json_string
+            ));
+        }
+        if include_file {
+            multipart_body.push_str(
+                "--boundary\r\n\
+            Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+            Content-Type: text/plain\r\n\r\n\
+            This is test content.\r\n",
+            );
+        }
+        multipart_body.push_str("--boundary--");
+        multipart_body
+    }
+
+    async fn multipart_from_parts(json: Option<&str>, include_file: bool) -> Multipart {
+        let request = Request::builder()
+            .header("content-type", "multipart/form-data; boundary=boundary")
+            .body(Body::from(build_multipart_body(json, include_file)))
+            .unwrap();
+        Multipart::from_request(request, &()).await.unwrap()
+    }
+
+    async fn assert_api_error_response(
+        response: axum::response::Response,
+        expected_status: StatusCode,
+        expected_error: &str,
+        expected_message: &str,
+    ) {
+        assert_eq!(response.status(), expected_status);
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read body");
+        let json: serde_json::Value =
+            serde_json::from_slice(&bytes).expect("error response should be JSON");
+        assert_eq!(json["error"], expected_error);
+        assert_eq!(json["message"], expected_message);
     }
 }
