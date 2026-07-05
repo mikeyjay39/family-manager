@@ -14,6 +14,8 @@ pub enum AppError {
     Validation(String),
     #[error("Internal server error")]
     Internal(#[from] anyhow::Error),
+    #[error("Unauthorized")]
+    Unauthorized,
 }
 
 #[derive(Serialize)]
@@ -35,11 +37,24 @@ impl IntoResponse for AppError {
                     "An internal error occurred".to_string(),
                 )
             }
+            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string()),
         };
         let body = ErrorResponse {
             error: error_type.to_string(),
             message,
         };
         (status, Json(body)).into_response()
+    }
+}
+
+impl From<Box<dyn std::error::Error>> for AppError {
+    fn from(err: Box<dyn std::error::Error>) -> Self {
+        AppError::Internal(anyhow::Error::msg(err.to_string()))
+    }
+}
+
+impl AppError {
+    pub fn internal_err_from_msg(msg: &str) -> Self {
+        AppError::Internal(anyhow::Error::msg(msg.to_string()))
     }
 }

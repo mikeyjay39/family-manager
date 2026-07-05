@@ -28,6 +28,7 @@ path = "src/main.rs"
 
 [dependencies]
 auth = { path = "libs/auth" }
+backend-utils = { path = "libs/common/backend-utils" }
 life-manager = { path = "libs/life-manager" }
 server-host = { path = "libs/common/server-host" }
 axum = { workspace = true }

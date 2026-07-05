@@ -9,6 +9,8 @@ use auth::AuthUser;
 use axum::extract::{Multipart, Path, Query, State};
 use axum::response::IntoResponse;
 use axum::{Json, http::StatusCode};
+use backend_utils::app_result::ApiResult;
+use backend_utils::{AppError, AppResponse};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -29,7 +31,7 @@ pub async fn create_document(
     }: AuthUser,
     State(DocumentState(document_use_cases)): State<DocumentState>,
     mut multipart: Multipart,
-) -> impl IntoResponse {
+) -> ApiResult<DocumentDto> {
     tracing::info!("Received multipart form data");
     let mut json_data: Option<CreateDocumentCommand> = None;
     let mut file_data = Vec::new();
@@ -68,8 +70,9 @@ pub async fn create_document(
         let document = match document_opt {
             Some(doc) => doc,
             None => {
-                tracing::error!("Failed to create document from file data");
-                return return_500();
+                let err_msg = "Failed to create document from file data";
+                tracing::error!(err_msg);
+                return AppResponse::internal_error_from_msg(err_msg);
             }
         };
 
@@ -80,19 +83,17 @@ pub async fn create_document(
         match saved_doc_res {
             Err(e) => {
                 tracing::error!("Error saving document: {}", e);
-                return_500()
+                AppResponse::internal_error(e)
             }
             Ok(saved_doc) => {
                 tracing::info!("Document saved: {:?}", saved_doc.title);
-                (
-                    StatusCode::CREATED,
-                    Json(json!(DocumentDto::from_document(&saved_doc))),
-                )
+                AppResponse::created(DocumentDto::from_document(&saved_doc))
             }
         }
     } else {
-        tracing::warn!("No valid JSON data found in the multipart form");
-        (StatusCode::NOT_FOUND, Json(json!({})))
+        let err_msg = "No valid JSON data found in the multipart form";
+        tracing::warn!(err_msg);
+        AppResponse::validation_error(err_msg)
     }
 }
 
@@ -130,10 +131,8 @@ pub async fn get_documents(
     let repo = document_use_cases.document_repository.clone();
     let query = GetDocumentsQuery::new(repo, user_id, PAGE_LIMIT);
     let documents = query.execute().await;
-    let document_dtos: Vec<DocumentDto> = documents
-        .iter()
-        .map(DocumentDto::from_document)
-        .collect();
+    let document_dtos: Vec<DocumentDto> =
+        documents.iter().map(DocumentDto::from_document).collect();
     (StatusCode::OK, Json(json!(document_dtos)))
 }
 
@@ -154,15 +153,9 @@ pub async fn get_documents_by_title(
     let repo = document_use_cases.document_repository.clone();
     let query = GetDocumentsTitleCursorQuery::new(repo, user_id, title, PAGE_LIMIT);
     let documents = query.execute().await;
-    let document_dtos: Vec<DocumentDto> = documents
-        .iter()
-        .map(DocumentDto::from_document)
-        .collect();
+    let document_dtos: Vec<DocumentDto> =
+        documents.iter().map(DocumentDto::from_document).collect();
     (StatusCode::OK, Json(json!(document_dtos)))
-}
-
-fn return_500() -> (StatusCode, Json<serde_json::Value>) {
-    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({})))
 }
 
 /*
