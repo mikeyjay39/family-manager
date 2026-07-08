@@ -5,6 +5,7 @@ use crate::infrastructure::document::document_api_types::{
     CreateDocumentCommand, GetDocumentsQueryParams,
 };
 use crate::infrastructure::document::document_state::DocumentState;
+use crate::infrastructure::document::document_tags::normalize_tag_names;
 use auth::AuthUser;
 use axum::extract::{Multipart, Path, Query, State};
 use axum::response::IntoResponse;
@@ -19,11 +20,11 @@ use super::document_dto::DocumentDto;
 const PAGE_LIMIT: u32 = 100;
 
 /// Creates a new document by processing multipart form data.
-/// +---------+     +-----------+     +--------+     +--------+
-/// |         |     |           |     |        |     |        |
-/// | Handler |---->| Tesseract |---->| Ollama |---->| SQLite |
-/// |         |     |           |     |        |     |        |
-/// +---------+     +-----------+     +--------+     +--------+
+/// +---------+     +-----------+     +--------+     +------------------+
+/// |         |     |           |     |        |     | SQLite           |
+/// | Handler |---->| Tesseract |---->| Ollama |---->| documents        |
+/// |         |     |           |     |        |     | tags/document_tags|
+/// +---------+     +-----------+     +--------+     +------------------+
 pub async fn create_document(
     AuthUser {
         user_id,
@@ -67,7 +68,7 @@ pub async fn create_document(
             false => Some(Document::new(&payload.title, &payload.content, user_id)),
         };
 
-        let document = match document_opt {
+        let mut document = match document_opt {
             Some(doc) => doc,
             None => {
                 let err_msg = "Failed to create document from file data";
@@ -76,6 +77,7 @@ pub async fn create_document(
             }
         };
 
+        document.tags = normalize_tag_names(&payload.tags);
         document.print_details();
 
         let repo = document_use_cases.document_repository.clone();
@@ -270,7 +272,7 @@ mod tests {
         let payload = CreateDocumentCommand {
             title: String::from("Test Document"),
             content: String::from("This is test content."),
-            tags: vec![],
+            tags: vec!["Tax".to_string()],
         };
 
         let document_use_cases = Arc::new(DocumentUseCases {
@@ -329,6 +331,7 @@ mod tests {
             from_slice(&bytes).expect("Failed to deserialize body");
         assert_eq!(response_document.title, "Test Document");
         assert_eq!(response_document.content, "This is test content.");
+        assert_eq!(response_document.tags, vec!["tax".to_string()]);
         assert!(!response_document.id.is_nil());
     }
 

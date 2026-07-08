@@ -7,5 +7,5 @@ pub mod document_orm_collection;
 pub mod document_router;
 pub mod document_state;
 pub mod document_tag_entity;
-pub mod document_tag_loader;
+pub mod document_tags;
 pub mod tag_entity;

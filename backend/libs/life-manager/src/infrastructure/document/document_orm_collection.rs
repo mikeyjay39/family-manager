@@ -3,7 +3,9 @@ use std::error::Error;
 use std::sync::Arc;
 
 use crate::application::document_repository::DocumentRepository;
-use crate::infrastructure::document::document_tag_loader::load_tags_by_document_ids;
+use crate::infrastructure::document::document_tags::{
+    load_tags_by_document_ids, persist_document_tags,
+};
 use crate::schema::documents;
 use crate::{
     domain::document::Document,
@@ -11,7 +13,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use deadpool_diesel::sqlite::Pool;
-use diesel::{ExpressionMethods, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
+use diesel::{Connection, ExpressionMethods, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -205,28 +207,36 @@ impl DocumentRepository for DocumentOrmCollection {
             content: document.content.clone(),
             user_id: document.user_id.to_string(),
         };
+        let tag_names = document.tags.clone();
+        let tag_names_for_return = tag_names.clone();
+        let doc_id = document.id;
+        let title = document.title.clone();
+        let content = document.content.clone();
+        let user_id = document.user_id;
 
         let result = conn
-            .interact(move |conn| {
-                diesel::insert_into(documents::table)
-                    .values(&new_document)
-                    .returning(DocumentEntity::as_returning())
-                    .get_result::<DocumentEntity>(conn)
+            .interact(move |conn| -> QueryResult<DocumentEntity> {
+                conn.transaction(|conn| {
+                    let saved_doc = diesel::insert_into(documents::table)
+                        .values(&new_document)
+                        .returning(DocumentEntity::as_returning())
+                        .get_result::<DocumentEntity>(conn)?;
+                    persist_document_tags(conn, &saved_doc.id, &tag_names)?;
+                    Ok(saved_doc)
+                })
             })
             .await;
 
         match result {
             Ok(success) => match success {
-                Ok(saved_doc) => {
-                    tracing::info!("Document saved with ID: {}", saved_doc.id);
-                    let doc_id = Uuid::parse_str(&saved_doc.id)?;
-                    let user_id = Uuid::parse_str(&saved_doc.user_id)?;
+                Ok(_saved_doc) => {
+                    tracing::info!("Document saved with ID: {}", doc_id);
                     Ok(Document::with_id(
                         doc_id,
-                        &saved_doc.title,
-                        &saved_doc.content,
+                        &title,
+                        &content,
                         user_id,
-                        vec![],
+                        tag_names_for_return,
                     ))
                 }
                 Err(e) => {
