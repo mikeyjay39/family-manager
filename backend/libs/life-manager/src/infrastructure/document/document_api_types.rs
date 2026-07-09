@@ -9,7 +9,6 @@ use ts_rs::TS;
 pub struct CreateDocumentCommand {
     pub title: String,
     pub content: String,
-    /// Accepted in multipart JSON; not persisted by the handler yet.
     #[serde(default)]
     pub tags: Vec<String>,
 }

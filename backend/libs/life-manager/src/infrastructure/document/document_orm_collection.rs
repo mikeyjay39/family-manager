@@ -1,7 +1,11 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 
 use crate::application::document_repository::DocumentRepository;
+use crate::infrastructure::document::document_tags::{
+    load_tags_by_document_ids, persist_document_tags,
+};
 use crate::schema::documents;
 use crate::{
     domain::document::Document,
@@ -9,7 +13,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use deadpool_diesel::sqlite::Pool;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{Connection, ExpressionMethods, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -35,24 +39,33 @@ impl DocumentRepository for DocumentOrmCollection {
 
         let id_str = id.to_string();
         let result = conn
-            .interact(move |conn| {
-                documents::table
+            .interact(move |conn| -> QueryResult<(DocumentEntity, HashMap<String, Vec<String>>)> {
+                let entity = documents::table
                     .filter(documents::id.eq(id_str))
                     .select(DocumentEntity::as_select())
-                    .get_result(conn)
+                    .get_result(conn)?;
+
+                let tags_by_document_id =
+                    load_tags_by_document_ids(conn, std::slice::from_ref(&entity.id))?;
+                Ok((entity, tags_by_document_id))
             })
             .await;
 
         match result {
             Ok(r) => match r {
-                Ok(entity) => {
+                Ok((entity, tags_by_document_id)) => {
                     let doc_id = Uuid::parse_str(&entity.id).ok()?;
                     let user_id = Uuid::parse_str(&entity.user_id).ok()?;
+                    let tags = tags_by_document_id
+                        .get(&entity.id)
+                        .cloned()
+                        .unwrap_or_default();
                     Some(Document::with_id(
                         doc_id,
                         &entity.title,
                         &entity.content,
                         user_id,
+                        tags,
                     ))
                 }
                 Err(_) => None,
@@ -77,23 +90,39 @@ impl DocumentRepository for DocumentOrmCollection {
         let limit = *limit as i64;
 
         let result = conn
-            .interact(move |conn| {
-                documents::table
+            .interact(
+                move |conn| -> QueryResult<(Vec<DocumentEntity>, HashMap<String, Vec<String>>)> {
+                let entities = documents::table
                     .filter(documents::user_id.eq(user_id_str))
                     .limit(limit)
                     .select(DocumentEntity::as_select())
-                    .get_results(conn)
-            })
+                    .get_results(conn)?;
+
+                let document_ids: Vec<String> = entities.iter().map(|e| e.id.clone()).collect();
+                let tags_by_document_id = load_tags_by_document_ids(conn, &document_ids)?;
+                Ok((entities, tags_by_document_id))
+            },
+            )
             .await;
 
         match result {
             Ok(r) => match r {
-                Ok(entities) => entities
+                Ok((entities, tags_by_document_id)) => entities
                     .into_iter()
                     .filter_map(|e| {
                         let doc_id = Uuid::parse_str(&e.id).ok()?;
                         let user_id = Uuid::parse_str(&e.user_id).ok()?;
-                        Some(Document::with_id(doc_id, &e.title, &e.content, user_id))
+                        let tags = tags_by_document_id
+                            .get(&e.id)
+                            .cloned()
+                            .unwrap_or_default();
+                        Some(Document::with_id(
+                            doc_id,
+                            &e.title,
+                            &e.content,
+                            user_id,
+                            tags,
+                        ))
                     })
                     .collect(),
                 Err(_) => vec![],
@@ -124,25 +153,41 @@ impl DocumentRepository for DocumentOrmCollection {
         let title = title.to_owned();
 
         let result = conn
-            .interact(move |conn| {
-                documents::table
+            .interact(
+                move |conn| -> QueryResult<(Vec<DocumentEntity>, HashMap<String, Vec<String>>)> {
+                let entities = documents::table
                     .filter(documents::user_id.eq(user_id_str))
                     .filter(documents::title.gt(title))
                     .order_by(documents::title.asc())
                     .limit(limit)
                     .select(DocumentEntity::as_select())
-                    .get_results(conn)
-            })
+                    .get_results(conn)?;
+
+                let document_ids: Vec<String> = entities.iter().map(|e| e.id.clone()).collect();
+                let tags_by_document_id = load_tags_by_document_ids(conn, &document_ids)?;
+                Ok((entities, tags_by_document_id))
+            },
+            )
             .await;
 
         match result {
             Ok(r) => match r {
-                Ok(entities) => entities
+                Ok((entities, tags_by_document_id)) => entities
                     .into_iter()
                     .filter_map(|e| {
                         let doc_id = Uuid::parse_str(&e.id).ok()?;
                         let user_id = Uuid::parse_str(&e.user_id).ok()?;
-                        Some(Document::with_id(doc_id, &e.title, &e.content, user_id))
+                        let tags = tags_by_document_id
+                            .get(&e.id)
+                            .cloned()
+                            .unwrap_or_default();
+                        Some(Document::with_id(
+                            doc_id,
+                            &e.title,
+                            &e.content,
+                            user_id,
+                            tags,
+                        ))
                     })
                     .collect(),
                 Err(_) => vec![],
@@ -162,27 +207,36 @@ impl DocumentRepository for DocumentOrmCollection {
             content: document.content.clone(),
             user_id: document.user_id.to_string(),
         };
+        let tag_names = document.tags.clone();
+        let tag_names_for_return = tag_names.clone();
+        let doc_id = document.id;
+        let title = document.title.clone();
+        let content = document.content.clone();
+        let user_id = document.user_id;
 
         let result = conn
-            .interact(move |conn| {
-                diesel::insert_into(documents::table)
-                    .values(&new_document)
-                    .returning(DocumentEntity::as_returning())
-                    .get_result::<DocumentEntity>(conn)
+            .interact(move |conn| -> QueryResult<DocumentEntity> {
+                conn.transaction(|conn| {
+                    let saved_doc = diesel::insert_into(documents::table)
+                        .values(&new_document)
+                        .returning(DocumentEntity::as_returning())
+                        .get_result::<DocumentEntity>(conn)?;
+                    persist_document_tags(conn, &saved_doc.id, &tag_names)?;
+                    Ok(saved_doc)
+                })
             })
             .await;
 
         match result {
             Ok(success) => match success {
-                Ok(saved_doc) => {
-                    tracing::info!("Document saved with ID: {}", saved_doc.id);
-                    let doc_id = Uuid::parse_str(&saved_doc.id)?;
-                    let user_id = Uuid::parse_str(&saved_doc.user_id)?;
+                Ok(_saved_doc) => {
+                    tracing::info!("Document saved with ID: {}", doc_id);
                     Ok(Document::with_id(
                         doc_id,
-                        &saved_doc.title,
-                        &saved_doc.content,
+                        &title,
+                        &content,
                         user_id,
+                        tag_names_for_return,
                     ))
                 }
                 Err(e) => {

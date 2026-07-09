@@ -31,12 +31,18 @@ impl Document {
     }
 
     /// Creates a document with a known ID (for loading from database)
-    pub fn with_id(id: Uuid, title: &str, content: &str, user_id: Uuid) -> Self {
+    pub fn with_id(
+        id: Uuid,
+        title: &str,
+        content: &str,
+        user_id: Uuid,
+        tags: Vec<String>,
+    ) -> Self {
         Self {
             id,
             title: title.to_string(),
             content: String::from(content),
-            tags: vec![],
+            tags,
             user_id,
         }
     }
@@ -114,7 +120,13 @@ mod tests {
     fn test_document_with_id() {
         let doc_id = Uuid::new_v4();
         let user_id = Uuid::new_v4();
-        let doc = Document::with_id(doc_id, "Test Document", "This is a test content.", user_id);
+        let doc = Document::with_id(
+            doc_id,
+            "Test Document",
+            "This is a test content.",
+            user_id,
+            vec![],
+        );
         assert_eq!(doc.id, doc_id);
         assert_eq!(doc.title, "Test Document");
         assert_eq!(doc.content, "This is a test content.");

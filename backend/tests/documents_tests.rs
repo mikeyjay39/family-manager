@@ -271,6 +271,73 @@ async fn create_and_get_document_no_file() {
 #[tokio::test]
 #[serial]
 #[traced_test]
+async fn create_and_get_document_with_tags() {
+    run_test_with_test_profile(|server: TestServer| async move {
+        let auth_header = build_auth_header(&server).await;
+
+        let payload = CreateDocumentCommand {
+            title: String::from("Tagged Integration Test Document"),
+            content: String::from("This is a test content."),
+            tags: vec!["finance".to_string(), "Tax".to_string()],
+        };
+        let json_string = serde_json::to_string(&payload).unwrap();
+
+        let multipart_body = format!(
+            "--boundary\r\n\
+        Content-Disposition: form-data; name=\"json\"\r\n\
+        Content-Type: application/json\r\n\r\n\
+        {}\r\n\
+        --boundary--",
+            json_string
+        );
+
+        let url = server
+            .server_url(DOCUMENTS_URL)
+            .expect("Failed to get server URL")
+            .to_string();
+
+        let res = reqwest::Client::new()
+            .post(&url)
+            .body(multipart_body)
+            .header("Content-Type", "multipart/form-data; boundary=boundary")
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert!(res.status().is_success());
+
+        let response_document = res.json::<DocumentDto>().await.unwrap();
+        assert_eq!(
+            response_document.tags,
+            vec!["finance".to_string(), "tax".to_string()]
+        );
+
+        let get_url = server
+            .server_url(&format!("{}/{}", DOCUMENTS_URL, response_document.id))
+            .expect("Failed to get server URL")
+            .to_string();
+        let get_response = reqwest::Client::new()
+            .get(&get_url)
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert!(get_response.status().is_success());
+
+        let document: DocumentDto = get_response.json().await.unwrap();
+        assert_eq!(document.title, payload.title);
+        assert_eq!(document.content, payload.content);
+        assert_eq!(
+            document.tags,
+            vec!["finance".to_string(), "tax".to_string()]
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+#[traced_test]
 async fn given_multipart_without_json_when_creating_document_then_returns_validation_error() {
     run_test_with_test_profile(|server: TestServer| async move {
         // Given
