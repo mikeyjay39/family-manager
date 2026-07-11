@@ -9,10 +9,13 @@ use life_manager::{
     LifeManagerDeps, LifeManagerStateBuilder,
     infrastructure::db::{create_connection_pool_from_url, run_migrations},
 };
-use mikeyjay_server::build_app_with_life_manager_state;
+use mikeyjay_server::{
+    build_app_with_life_manager_state, build_app_with_tenant_states,
+};
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
+use test_tenant::{TestTenantDeps, TestTenantStateBuilder};
 
 use serde_json::json;
 use wiremock::{
@@ -22,7 +25,8 @@ use wiremock::{
 
 use crate::common::docker::{docker_compose_down, start_docker_compose_dev_profile};
 
-const AUTH_URL: &str = "/life-manager/api/v1/auth";
+pub const LIFE_MANAGER_AUTH_URL: &str = "/life-manager/api/v1/auth";
+pub const TEST_TENANT_AUTH_URL: &str = "/test-tenant/api/v1/auth";
 
 #[derive(Serialize, Deserialize)]
 pub struct LoginRequest {
@@ -110,6 +114,64 @@ where
 
     // afterEach (async cleanup)
     tracing::info!("Tests completed with all containers.");
+    docker_compose_down();
+}
+
+pub async fn run_test_with_both_tenants<F, Fut>(test: F)
+where
+    F: FnOnce(TestServer) -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
+    run_test_with_both_tenants_and_db_setup(|_lm_pool, _tt_pool| async {}, test).await;
+}
+
+pub async fn run_test_with_both_tenants_and_db_setup<Setup, SetupFut, F, Fut>(
+    db_setup: Setup,
+    test: F,
+)
+where
+    Setup: FnOnce(
+        Arc<deadpool_diesel::sqlite::Pool>,
+        Arc<deadpool_diesel::sqlite::Pool>,
+    ) -> SetupFut,
+    SetupFut: std::future::Future<Output = ()>,
+    F: FnOnce(TestServer) -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
+    tracing::info!("Starting beforeEach setup for both tenants");
+
+    let life_manager_db = NamedTempFile::new().expect("Failed to create temp DB file");
+    let test_tenant_db = NamedTempFile::new().expect("Failed to create temp DB file");
+    let life_manager_url = life_manager_db.path().to_str().unwrap().to_string();
+    let test_tenant_url = test_tenant_db.path().to_str().unwrap().to_string();
+    tracing::info!(
+        "Created temp SQLite databases at {} and {}",
+        life_manager_url,
+        test_tenant_url
+    );
+
+    let test_env_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.test.env");
+    dotenv::from_filename(&test_env_path).ok();
+
+    let ollama: MockServer = mock_ollama_response().await;
+
+    unsafe {
+        set_var("OLLAMA_URL", ollama.uri());
+        set_var("DATABASE_URL", &life_manager_url);
+        set_var("TEST_TENANT_DATABASE_URL", &test_tenant_url);
+    }
+
+    let server =
+        build_both_tenants_app_server_with_db_setup(&life_manager_url, &test_tenant_url, db_setup)
+            .await;
+    let url = server
+        .server_address()
+        .expect("Failed to get server address");
+
+    tracing::info!("Running test on url {url}");
+    test(server).await;
+
+    tracing::info!("Tests completed with both tenants.");
     docker_compose_down();
 }
 
@@ -229,6 +291,68 @@ where
     server
 }
 
+pub async fn build_both_tenants_app_server_with_db_setup<Setup, SetupFut>(
+    life_manager_url: &str,
+    test_tenant_url: &str,
+    db_setup: Setup,
+) -> TestServer
+where
+    Setup: FnOnce(
+        Arc<deadpool_diesel::sqlite::Pool>,
+        Arc<deadpool_diesel::sqlite::Pool>,
+    ) -> SetupFut,
+    SetupFut: std::future::Future<Output = ()>,
+{
+    tracing::info!("Creating SQLite connection pools for both tenants...");
+
+    let life_manager_pool = create_connection_pool_from_url(life_manager_url);
+    let _conn = life_manager_pool
+        .get()
+        .await
+        .expect("Failed to get life-manager DB connection");
+    run_migrations(&life_manager_pool).await;
+    auth::infrastructure::db::run_migrations(&life_manager_pool).await;
+    let life_manager_pool = Arc::new(life_manager_pool);
+
+    let test_tenant_pool =
+        test_tenant::infrastructure::db::create_connection_pool_from_url(test_tenant_url);
+    let _conn = test_tenant_pool
+        .get()
+        .await
+        .expect("Failed to get test-tenant DB connection");
+    auth::infrastructure::db::run_migrations(&test_tenant_pool).await;
+    let test_tenant_pool = Arc::new(test_tenant_pool);
+
+    db_setup(life_manager_pool.clone(), test_tenant_pool.clone()).await;
+
+    tracing::info!("Building backend app with both tenants...");
+    let life_manager_state = LifeManagerStateBuilder::new()
+        .build(LifeManagerDeps {
+            db_pool: Some(life_manager_pool),
+            ..LifeManagerDeps::default()
+        })
+        .await;
+    let test_tenant_state = TestTenantStateBuilder::new()
+        .build(TestTenantDeps {
+            db_pool: Some(test_tenant_pool),
+            ..TestTenantDeps::default()
+        })
+        .await;
+    let app = build_app_with_tenant_states(life_manager_state, test_tenant_state).await;
+    let config = TestServerConfig {
+        transport: Some(Transport::HttpRandomPort),
+        ..TestServerConfig::default()
+    };
+
+    let server = TestServer::new_with_config(app, config).expect("Failed to start test server");
+    let health_url = server
+        .server_url("/api/health")
+        .expect("Failed to get server URL");
+
+    wait_for_service_to_be_ready(health_url.as_str(), "Life Manager Backend").await;
+    server
+}
+
 pub async fn wait_for_service_to_be_ready(url: &str, service_name: &str) {
     let client = Client::new();
 
@@ -251,11 +375,15 @@ pub async fn wait_for_service_to_be_ready(url: &str, service_name: &str) {
 }
 
 pub async fn build_auth_header(server: &TestServer) -> String {
+    build_auth_header_at(server, LIFE_MANAGER_AUTH_URL).await
+}
+
+pub async fn build_auth_header_at(server: &TestServer, auth_url: &str) -> String {
     let username = "admin";
     let password = "password";
 
     let url_result = server
-        .server_url(format!("{}/login", AUTH_URL).as_str())
+        .server_url(format!("{}/login", auth_url).as_str())
         .expect("Failed to get server URL");
 
     let url = url_result.as_str();

@@ -4,7 +4,7 @@ Overview of the Life Manager stack: backend workspace layout, HTTP routing, prod
 
 ## Backend workspace
 
-The backend is a Cargo workspace. The **`mikeyjay-server`** binary crate wires Axum routes and depends on two library crates under **`backend/libs/`**. Integration tests live in **`backend/tests/`** and exercise the assembled app.
+The backend is a Cargo workspace. The **`mikeyjay-server`** binary crate wires Axum routes and depends on library crates under **`backend/libs/`**. Integration tests live in **`backend/tests/`** and exercise the assembled app.
 
 ```mermaid
 flowchart TB
@@ -14,25 +14,31 @@ flowchart TB
       host["server-host\nAppBootstrap, TenantMount"]
       auth["auth\nJWT login, auth middleware"]
       lm["life-manager tenant\nLifeManagerState, own DB pool"]
+      tt["test-tenant pilot\nTestTenantState, own DB pool"]
     end
     tests["tests/ (integration)"]
   end
 
   bin --> host
   bin --> lm
+  bin --> tt
   lm --> host
   lm --> auth
+  tt --> host
+  tt --> auth
   tests --> bin
   tests --> auth
   tests --> lm
+  tests --> tt
 ```
 
 | Crate | Role |
 |-------|------|
 | **`mikeyjay-server`** | HTTP server entrypoint; stateless top-level routes (`/api/health`, `/api/version`); mounts tenant routers |
 | **`server-host`** | Composition-only `AppBootstrap` and `TenantMount` trait — not Axum state |
-| **`auth`** | Authentication router and JWT helpers; mounted under `/life-manager/api/v1/auth` |
-| **`life-manager`** | First tenant crate: domain logic, Diesel/SQLite, document API; owns `LifeManagerState` and DB pool |
+| **`auth`** | Authentication router and JWT helpers; mounted under each tenant's `/api/v1/auth` |
+| **`life-manager`** | Primary tenant crate: domain logic, Diesel/SQLite, document API; owns `LifeManagerState` and `DATABASE_URL` pool |
+| **`test-tenant`** | Second tenant (pilot): auth-only API; owns `TestTenantState` and `TEST_TENANT_DATABASE_URL` pool |
 
 Each tenant crate implements `TenantMount`, builds its own state (including DB pool and migrations), and registers `.with_state()` on its nested router only. The parent router has no global Axum state.
 
@@ -50,18 +56,23 @@ flowchart LR
 
   subgraph gateway["nginx gateway (prod)"]
     loc1["/life-manager/api/*"]
+    loc1b["/test-tenant/api/*"]
     loc2["/api/health, /api/version"]
     loc3["/ → static frontend"]
   end
 
   subgraph server["mikeyjay-server (Axum)"]
     r1["/life-manager\nLifeManagerTenant::mount()"]
+    r1b["/test-tenant\nTestTenant::mount()"]
     r2["/api/v1\nauth + documents\n.with_state(LifeManagerState)"]
+    r2b["/api/v1\nauth only\n.with_state(TestTenantState)"]
     r3["/api/health, /api/version\n(stateless top-level)"]
   end
 
   fe -->|"same-origin /life-manager/api/v1/..."| loc1
+  fe -->|"same-origin /test-tenant/api/v1/..."| loc1b
   loc1 --> r1 --> r2
+  loc1b --> r1b --> r2b
   loc2 --> r3
 ```
 
@@ -72,6 +83,8 @@ flowchart LR
 | `/life-manager/api/v1/auth/login` | `auth` crate — login |
 | `/life-manager/api/v1/documents` | `life-manager` — list / create documents |
 | `/life-manager/api/v1/documents/{id}` | `life-manager` — get document by UUID |
+| `/test-tenant/api/v1/auth/login` | `auth` crate — login (test-tenant pilot) |
+| `/test-tenant/api/v1/auth/protected` | `auth` crate — auth smoke test (test-tenant pilot) |
 | `/api/health` | Top-level — liveness |
 | `/api/version` | Top-level — git commit |
 
@@ -94,7 +107,7 @@ flowchart TB
 
   browser --> gateway
   gateway -->|"/"| frontend
-  gateway -->|"/life-manager/api, /api"| api
+  gateway -->|"/life-manager/api, /test-tenant/api, /api"| api
   api --> db
   api -.->|"TESSERACT_ENABLED"| ocr
   gateway -->|"stdout"| alloy

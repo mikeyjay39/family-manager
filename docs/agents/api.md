@@ -10,6 +10,8 @@ Parent hub: [../../AGENTS.md](../../AGENTS.md). Routing diagrams: [../architectu
 | `GET /api/version` | Build/git revision string |
 | `POST /life-manager/api/v1/auth/login` | JWT login |
 | `GET /life-manager/api/v1/auth/protected` | Auth smoke test |
+| `POST /test-tenant/api/v1/auth/login` | JWT login (test-tenant pilot) |
+| `GET /test-tenant/api/v1/auth/protected` | Auth smoke test (test-tenant pilot) |
 | `POST /life-manager/api/v1/documents/` | Multipart: `json` (CreateDocumentCommand) + `file` |
 | `GET /life-manager/api/v1/documents/{id}` | Single document |
 | `GET /life-manager/api/v1/documents/` | Query by title |
@@ -18,13 +20,14 @@ Ops endpoints stay at `/api/*`. The v1 product API is namespaced under `/life-ma
 
 ### Router wiring
 
-- `backend/src/lib.rs`: stateless `/api/health`, `/api/version`; `LifeManagerTenant::mount(&AppBootstrap)` nests `/life-manager` with per-tenant state
+- `backend/src/lib.rs`: stateless `/api/health`, `/api/version`; `LifeManagerTenant::mount()` and `TestTenant::mount()` nest `/life-manager` and `/test-tenant` with per-tenant state
 - `backend/libs/life-manager/src/life_manager_tenant.rs`: `LifeManagerTenant` implements `TenantMount`; `api_router()` nests `/api/v1` → `auth`, `documents`
+- `backend/libs/test-tenant/src/test_tenant.rs`: `TestTenant` implements `TenantMount`; `api_router()` nests `/api/v1` → `auth` only (pilot)
 - `backend/libs/common/server-host/`: `AppBootstrap` (build-time only) and `TenantMount` trait
 
 ### Gateway (prod)
 
-Nginx proxies `/life-manager/api` (v1 API) and `/api` (health/version) separately to the backend. See `nginx/templates/default.conf.template`.
+Nginx proxies `/life-manager/api` and `/test-tenant/api` (v1 API) and `/api` (health/version) separately to the backend. See `nginx/templates/default.conf.template`.
 
 ## Auth
 

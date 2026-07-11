@@ -1,7 +1,11 @@
 import type { TenantMeta } from '@/lib/tenant/types';
 import { lifeManagerTenantMeta } from '@/tenants/life-manager/meta';
+import { testTenantMeta } from '@/tenants/test-tenant/meta';
 
-const REGISTERED_TENANT_METAS: readonly TenantMeta[] = [lifeManagerTenantMeta];
+const REGISTERED_TENANT_METAS: readonly TenantMeta[] = [
+  lifeManagerTenantMeta,
+  testTenantMeta,
+];
 
 const tenantIdByHostname = new Map<string, string>();
 

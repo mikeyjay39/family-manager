@@ -1,0 +1,15 @@
+[package]
+name = "test-tenant"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = { workspace = true }
+auth = { path = "../auth" }
+axum = { workspace = true }
+deadpool-diesel = { version = "0.6", features = ["sqlite"] }
+dotenvy = "0.15.0"
+libsqlite3-sys = { version = "0.35", features = ["bundled"] }
+server-host = { path = "../common/server-host" }
+tokio = { version = "1.47.1", features = ["full"] }
+tracing = { workspace = true }

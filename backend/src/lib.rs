@@ -7,6 +7,7 @@ use axum::{
 };
 use life_manager::{LifeManagerState, LifeManagerTenant};
 use server_host::{AppBootstrap, TenantMount};
+use test_tenant::{TestTenant, TestTenantState};
 use std::env;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
@@ -43,15 +44,33 @@ pub async fn build_app() -> Router {
 /// with a test-specific bootstrap instead?
 pub async fn build_app_with_life_manager_state(state: LifeManagerState) -> Router {
     let life_manager = LifeManagerTenant::mount_with_state(state);
-    build_app_with_tenants(life_manager).await
+    build_app_with_tenants(Some(life_manager), None).await
+}
+
+pub async fn build_app_with_test_tenant_state(state: TestTenantState) -> Router {
+    let test_tenant = TestTenant::mount_with_state(state);
+    build_app_with_tenants(None, Some(test_tenant)).await
+}
+
+pub async fn build_app_with_tenant_states(
+    life_manager_state: LifeManagerState,
+    test_tenant_state: TestTenantState,
+) -> Router {
+    let life_manager = LifeManagerTenant::mount_with_state(life_manager_state);
+    let test_tenant = TestTenant::mount_with_state(test_tenant_state);
+    build_app_with_tenants(Some(life_manager), Some(test_tenant)).await
 }
 
 async fn build_app_with_bootstrap(bootstrap: AppBootstrap) -> Router {
     let life_manager = LifeManagerTenant::mount(&bootstrap).await;
-    build_app_with_tenants(life_manager).await
+    let test_tenant = TestTenant::mount(&bootstrap).await;
+    build_app_with_tenants(Some(life_manager), Some(test_tenant)).await
 }
 
-async fn build_app_with_tenants(life_manager: Router) -> Router {
+async fn build_app_with_tenants(
+    life_manager: Option<Router>,
+    test_tenant: Option<Router>,
+) -> Router {
     tracing::info!("Building application...");
 
     // logging
@@ -65,11 +84,18 @@ async fn build_app_with_tenants(life_manager: Router) -> Router {
         .try_init()
         .ok();
 
-    Router::new()
+    let mut app = Router::new()
         .route("/api/health", get(|| async { "up" }))
-        .route("/api/version", get(|| async { build_info::git_commit() }))
-        .nest(LifeManagerTenant::MOUNT_PATH, life_manager)
-        .layer(
+        .route("/api/version", get(|| async { build_info::git_commit() }));
+
+    if let Some(life_manager) = life_manager {
+        app = app.nest(LifeManagerTenant::MOUNT_PATH, life_manager);
+    }
+    if let Some(test_tenant) = test_tenant {
+        app = app.nest(TestTenant::MOUNT_PATH, test_tenant);
+    }
+
+    app.layer(
             CorsLayer::new()
                 .allow_methods([
                     Method::GET,

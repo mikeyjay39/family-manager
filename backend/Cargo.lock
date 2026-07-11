@@ -2066,6 +2066,7 @@ dependencies = [
  "serial_test",
  "server-host",
  "tempfile",
+ "test-tenant",
  "testcontainers",
  "time",
  "tokio",
@@ -3697,6 +3698,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test-tenant"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "auth",
+ "axum",
+ "deadpool-diesel",
+ "dotenvy",
+ "libsqlite3-sys",
+ "server-host",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

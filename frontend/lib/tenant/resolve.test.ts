@@ -21,6 +21,26 @@ describe('resolveTenantId', () => {
     ).toEqual({ tenantId: 'life-manager', source: 'hostname' });
   });
 
+  it('resolves test-tenant fake subdomain hostnames for local dev', () => {
+    expect(
+      resolveTenantId({
+        platform: 'web',
+        hostname: 'test-tenant.localhost',
+        search: '',
+      })
+    ).toEqual({ tenantId: 'test-tenant', source: 'hostname' });
+  });
+
+  it('uses ?tenant=test-tenant on localhost', () => {
+    expect(
+      resolveTenantId({
+        platform: 'web',
+        hostname: 'localhost',
+        search: '?tenant=test-tenant',
+      })
+    ).toEqual({ tenantId: 'test-tenant', source: 'query-param' });
+  });
+
   it('uses ?tenant= on localhost before env default', () => {
     expect(
       resolveTenantId({
@@ -82,6 +102,17 @@ describe('resolveTenantId', () => {
         envTenant: 'life-manager',
       })
     ).toEqual({ tenantId: 'life-manager', source: 'env-tenant' });
+  });
+
+  it('resolves native test-tenant builds from EXPO_PUBLIC_TENANT', () => {
+    expect(
+      resolveTenantId({
+        platform: 'android',
+        hostname: '',
+        search: '',
+        envTenant: 'test-tenant',
+      })
+    ).toEqual({ tenantId: 'test-tenant', source: 'env-tenant' });
   });
 
   it('falls back on native when EXPO_PUBLIC_TENANT is unset', () => {
