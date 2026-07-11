@@ -33,4 +33,8 @@ echo "Deploying prod stack (:latest images) for commit ${GITHUB_SHA}"
 
 compose pull
 compose up -d
+# Nginx resolves upstream hostnames once at startup; when only backend/frontend
+# images change, their containers get new IPs but gateway may stay running → 502. This 
+# forces gateway to restart and resolve the new IPs.
+compose up -d --force-recreate --no-deps gateway
 compose ps
