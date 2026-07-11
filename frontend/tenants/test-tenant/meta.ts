@@ -5,7 +5,7 @@ export const testTenantMeta: TenantMeta = {
   mountPath: '/test-tenant',
   apiV1Prefix: '/test-tenant/api/v1',
   displayName: 'Test Tenant',
-  hostnames: ['test-tenant.localhost'],
+  hostnames: ['test-tenant.jeszenka.com', 'test-tenant.localhost'],
   theme: {
     headerBackground: { light: '#E8D5B7', dark: '#3D2F1F' },
     light: { tint: '#B8860B' },

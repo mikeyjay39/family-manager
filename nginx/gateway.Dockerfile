@@ -5,4 +5,4 @@ RUN apk add --no-cache openssl
 COPY docker-entrypoint.d/05-gen-localhost-certs.sh /docker-entrypoint.d/05-gen-localhost-certs.sh
 RUN chmod +x /docker-entrypoint.d/05-gen-localhost-certs.sh
 
-COPY templates/default.conf.template /etc/nginx/templates/default.conf.template
+COPY generated/tenant-servers.conf.template /etc/nginx/templates/default.conf.template

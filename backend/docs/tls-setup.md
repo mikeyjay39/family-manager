@@ -8,6 +8,15 @@ For HTTPS you typically:
 2. Proxy to the backend over HTTP on your internal network (for example `http://127.0.0.1:${APP_PORT}`).
 3. Configure the frontend `EXPO_PUBLIC_API_BASE_URL` / `extra.apiUrl` to the **public HTTPS origin** clients use.
 
+## Production: Let's Encrypt (per-tenant hostnames)
+
+Prod TLS is terminated at the **gateway** with **separate certs per tenant hostname**. See [`../../nginx/README.md`](../../nginx/README.md):
+
+- Registry: `nginx/tenants.prod.json`
+- Generate locally: `./scripts/generate-nginx-tenant-servers.sh` → commit `nginx/generated/tenant-servers.conf.template`
+- Issue certs on server at deploy: `scripts/provision-tenant-tls.sh`
+- Renewal: host cron + `docker exec life_manager_gateway nginx -s reload`
+
 ## Local setup: nginx TLS termination with self-signed localhost certs
 
 The Compose `gateway` service is configured to:

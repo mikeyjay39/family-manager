@@ -14,6 +14,9 @@
 # and pushes only changed prod images (backend/, frontend/, nginx/, observability/) to ECR; Lightsail always pulls
 # :latest for the full stack via scripts/deploy-prod-lightsail.sh.
 #
+# Nginx prod vhosts: committed nginx/generated/tenant-servers.conf.template (from nginx/tenants.prod.json).
+# Regenerate locally: ./scripts/generate-nginx-tenant-servers.sh. TLS: scripts/provision-tenant-tls.sh on deploy.
+#
 # Logs: the `alloy` service (prod and docker-dev profiles) ships Compose project logs to Grafana Cloud Loki.
 # Config is baked into observability/Dockerfile. Set GRAFANA_LOKI_URL, GRAFANA_LOKI_USERNAME,
 # GRAFANA_CLOUD_API_KEY, and GRAFANA_LOKI_ENVIRONMENT in .prod.env and/or .dev.env.
@@ -110,7 +113,7 @@ services:
       - ./nginx/certs:/etc/nginx/certs
       - ./nginx/certbot/webroot:/var/www/certbot
       # Pick up nginx template edits without rebuilding the gateway image.
-      - ./nginx/templates/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./nginx/generated/tenant-servers.conf.template:/etc/nginx/templates/default.conf.template:ro
     depends_on:
       - life-manager
       - frontend

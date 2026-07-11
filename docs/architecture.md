@@ -122,7 +122,7 @@ The **`alloy`** log shipper also runs under the **docker-dev** profile (same con
 
 The prod frontend build defaults to an empty **`EXPO_PUBLIC_API_BASE_URL`**, so the browser uses same-origin paths (via the gateway). Override with a full origin when the API is on another host (e.g. physical devices on the LAN).
 
-See **`docker-compose.yml`** header comments and **`nginx/templates/default.conf.template`** for proxy rules.
+See **`docker-compose.yml`** header comments and **`nginx/generated/tenant-servers.conf.template`** (generated from **`nginx/tenants.prod.json`**) for proxy rules. Regenerate with **`./scripts/generate-nginx-tenant-servers.sh`** — see **`nginx/README.md`**.
 
 ### CI deploy to AWS (merge to `main`)
 

@@ -1,0 +1,15 @@
+[
+  {
+    "id": "life-manager",
+    "hostname": "life-manager.jeszenka.com",
+    "mountPath": "/life-manager",
+    "default": true,
+    "scope": "full"
+  },
+  {
+    "id": "test-tenant",
+    "hostname": "test-tenant.jeszenka.com",
+    "mountPath": "/test-tenant",
+    "scope": "auth-only"
+  }
+]

@@ -27,7 +27,7 @@ Ops endpoints stay at `/api/*`. The v1 product API is namespaced under `/life-ma
 
 ### Gateway (prod)
 
-Nginx proxies `/life-manager/api` and `/test-tenant/api` (v1 API) and `/api` (health/version) separately to the backend. See `nginx/templates/default.conf.template`.
+Nginx proxies each tenant hostname to its mount path (see `nginx/tenants.prod.json` and `nginx/generated/tenant-servers.conf.template`) plus `/api` (health/version) to the backend. See `nginx/README.md`.
 
 ## Auth
 
