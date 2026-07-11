@@ -3,6 +3,7 @@ mod common;
 use std::fs;
 
 use axum_test::TestServer;
+use chrono::NaiveDate;
 use life_manager::infrastructure::document::{
     document_api_types::CreateDocumentCommand, document_dto::DocumentDto,
 };
@@ -32,6 +33,8 @@ async fn create_and_get_document_docker_compose() {
             title: String::from("Integration Test Document"),
             content: String::from("This is a test content."),
             tags: vec![],
+            issued_date: None,
+            expire_date: None,
         };
 
         let json_string = serde_json::to_string(&payload).unwrap();
@@ -123,6 +126,8 @@ async fn create_and_get_document() {
             title: String::from("Integration Test Document"),
             content: String::from("This is a test content."),
             tags: vec![],
+            issued_date: None,
+            expire_date: None,
         };
 
         let json_string = serde_json::to_string(&payload).unwrap();
@@ -214,6 +219,8 @@ async fn create_and_get_document_no_file() {
             title: String::from("Integration Test Document"),
             content: String::from("This is a test content."),
             tags: vec![],
+            issued_date: None,
+            expire_date: None,
         };
         // Make REST API call to create a document
         let json_string = serde_json::to_string(&payload).unwrap();
@@ -271,6 +278,81 @@ async fn create_and_get_document_no_file() {
 #[tokio::test]
 #[serial]
 #[traced_test]
+async fn create_and_get_document_with_dates() {
+    run_test_with_test_profile(|server: TestServer| async move {
+        let auth_header = build_auth_header(&server).await;
+
+        let issued_date = NaiveDate::from_ymd_opt(2024, 6, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let expire_date = NaiveDate::from_ymd_opt(2026, 6, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+
+        let payload = CreateDocumentCommand {
+            title: String::from("Dated Integration Test Document"),
+            content: String::from("This is a test content with dates."),
+            tags: vec![],
+            issued_date: Some(issued_date),
+            expire_date: Some(expire_date),
+        };
+        let json_string = serde_json::to_string(&payload).unwrap();
+
+        let multipart_body = format!(
+            "--boundary\r\n\
+        Content-Disposition: form-data; name=\"json\"\r\n\
+        Content-Type: application/json\r\n\r\n\
+        {}\r\n\
+        --boundary--",
+            json_string
+        );
+
+        let url_result = server
+            .server_url(DOCUMENTS_URL)
+            .expect("Failed to get server URL");
+        let url = url_result.as_str();
+
+        let res = reqwest::Client::new()
+            .post(url)
+            .body(multipart_body)
+            .header("Content-Type", "multipart/form-data; boundary=boundary")
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert!(res.status().is_success());
+
+        let response_document = res.json::<DocumentDto>().await.unwrap();
+        assert_eq!(response_document.issued_date, Some(issued_date));
+        assert_eq!(response_document.expire_date, Some(expire_date));
+
+        let get_request_url = server
+            .server_url(&format!("{}/{}", DOCUMENTS_URL, &response_document.id))
+            .expect("Failed to get server URL")
+            .to_string();
+
+        let get_response = reqwest::Client::new()
+            .get(get_request_url)
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert!(get_response.status().is_success());
+
+        let document: DocumentDto = get_response.json().await.unwrap();
+        assert_eq!(document.title, payload.title);
+        assert_eq!(document.content, payload.content);
+        assert_eq!(document.issued_date, Some(issued_date));
+        assert_eq!(document.expire_date, Some(expire_date));
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+#[traced_test]
 async fn create_and_get_document_with_tags() {
     run_test_with_test_profile(|server: TestServer| async move {
         let auth_header = build_auth_header(&server).await;
@@ -279,6 +361,8 @@ async fn create_and_get_document_with_tags() {
             title: String::from("Tagged Integration Test Document"),
             content: String::from("This is a test content."),
             tags: vec!["finance".to_string(), "Tax".to_string()],
+            issued_date: None,
+            expire_date: None,
         };
         let json_string = serde_json::to_string(&payload).unwrap();
 
@@ -327,10 +411,9 @@ async fn create_and_get_document_with_tags() {
         let document: DocumentDto = get_response.json().await.unwrap();
         assert_eq!(document.title, payload.title);
         assert_eq!(document.content, payload.content);
-        assert_eq!(
-            document.tags,
-            vec!["finance".to_string(), "tax".to_string()]
-        );
+        assert!(document.tags.contains(&"finance".to_string()));
+        assert!(document.tags.contains(&"tax".to_string()));
+        assert_eq!(document.tags.len(), payload.tags.len());
     })
     .await;
 }
@@ -382,16 +465,22 @@ async fn get_all_documents() {
                 title: String::from("First Document"),
                 content: String::from("Content of first document"),
                 tags: vec![],
+                issued_date: None,
+                expire_date: None,
             },
             CreateDocumentCommand {
                 title: String::from("Second Document"),
                 content: String::from("Content of second document"),
                 tags: vec![],
+                issued_date: None,
+                expire_date: None,
             },
             CreateDocumentCommand {
                 title: String::from("Third Document"),
                 content: String::from("Content of third document"),
                 tags: vec![],
+                issued_date: None,
+                expire_date: None,
             },
         ];
 

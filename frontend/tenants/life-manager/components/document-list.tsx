@@ -20,6 +20,9 @@ export function parseDocumentDto(item: unknown): DocumentDto {
     title: String(d.title ?? ''),
     content: String(d.content ?? ''),
     tags: Array.isArray(d.tags) ? d.tags.map(String) : [],
+    created_at: String(d.created_at ?? ''),
+    issued_date: d.issued_date != null ? String(d.issued_date) : null,
+    expire_date: d.expire_date != null ? String(d.expire_date) : null,
   };
 }
 

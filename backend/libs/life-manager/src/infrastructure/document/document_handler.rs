@@ -78,6 +78,8 @@ pub async fn create_document(
         };
 
         document.tags = normalize_tag_names(&payload.tags);
+        document.issued_date = payload.issued_date;
+        document.expire_date = payload.expire_date;
         document.print_details();
 
         let repo = document_use_cases.document_repository.clone();
@@ -273,6 +275,8 @@ mod tests {
             title: String::from("Test Document"),
             content: String::from("This is test content."),
             tags: vec!["Tax".to_string()],
+            issued_date: None,
+            expire_date: None,
         };
 
         let document_use_cases = Arc::new(DocumentUseCases {
@@ -371,6 +375,8 @@ mod tests {
             title: String::from("Test Document"),
             content: String::from("This is test content."),
             tags: vec![],
+            issued_date: None,
+            expire_date: None,
         };
         let document_use_cases = Arc::new(DocumentUseCases {
             document_repository: Arc::new(DocumentCollection::new()),
@@ -406,6 +412,8 @@ mod tests {
             title: String::from("Test Document"),
             content: String::from("This is test content."),
             tags: vec![],
+            issued_date: None,
+            expire_date: None,
         };
         let document_use_cases = Arc::new(DocumentUseCases {
             document_repository: Arc::new(MockFailingDocumentRepository {}),

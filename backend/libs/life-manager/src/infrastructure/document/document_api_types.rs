@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -11,6 +12,10 @@ pub struct CreateDocumentCommand {
     pub content: String,
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub issued_date: Option<NaiveDateTime>,
+    #[serde(default)]
+    pub expire_date: Option<NaiveDateTime>,
 }
 
 #[derive(Deserialize, Debug, Serialize, TS)]

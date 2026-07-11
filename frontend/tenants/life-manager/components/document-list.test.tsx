@@ -58,8 +58,8 @@ describe('DocumentList', () => {
     mockAuthenticatedFetch.mockResolvedValue(
       new Response(
         JSON.stringify([
-          { id: '1', title: 'Alpha', content: 'c1' },
-          { id: '2', title: 'Beta', content: 'c2' },
+          { id: '1', title: 'Alpha', content: 'c1', created_at: '2026-07-11T00:00:00' },
+          { id: '2', title: 'Beta', content: 'c2', created_at: '2026-07-11T00:00:00' },
         ]),
         { status: 200 }
       )
@@ -93,7 +93,7 @@ describe('DocumentList', () => {
 
   it('opens modal with title and content when a row is pressed', async () => {
     mockAuthenticatedFetch.mockResolvedValue(
-      new Response(JSON.stringify([{ id: '1', title: 'Doc A', content: 'Body text' }]), { status: 200 })
+      new Response(JSON.stringify([{ id: '1', title: 'Doc A', content: 'Body text', created_at: '2026-07-11T00:00:00' }]), { status: 200 })
     );
     renderDocumentList();
     await waitFor(() => {
@@ -107,18 +107,65 @@ describe('DocumentList', () => {
 
 describe('parseDocumentDto', () => {
   it('defaults tags to an empty array when missing', () => {
-    expect(parseDocumentDto({ id: '1', title: 'Alpha', content: 'c1' }).tags).toEqual([]);
+    expect(parseDocumentDto({ id: '1', title: 'Alpha', content: 'c1', created_at: '2026-07-11T00:00:00' }).tags).toEqual([]);
   });
 
   it('maps tags when present', () => {
     expect(
-      parseDocumentDto({ id: '1', title: 'Alpha', content: 'c1', tags: ['tax', '2024'] }).tags
+      parseDocumentDto({
+        id: '1',
+        title: 'Alpha',
+        content: 'c1',
+        tags: ['tax', '2024'],
+        created_at: '2026-07-11T00:00:00',
+      }).tags
     ).toEqual(['tax', '2024']);
   });
 
   it('defaults tags to an empty array when tags is not an array', () => {
     expect(
-      parseDocumentDto({ id: '1', title: 'Alpha', content: 'c1', tags: 'not-an-array' }).tags
+      parseDocumentDto({
+        id: '1',
+        title: 'Alpha',
+        content: 'c1',
+        tags: 'not-an-array',
+        created_at: '2026-07-11T00:00:00',
+      }).tags
     ).toEqual([]);
+  });
+
+  it('maps created_at when present', () => {
+    expect(
+      parseDocumentDto({
+        id: '1',
+        title: 'Alpha',
+        content: 'c1',
+        created_at: '2026-07-11T12:34:56',
+      }).created_at
+    ).toBe('2026-07-11T12:34:56');
+  });
+
+  it('maps nullable issued_date and expire_date', () => {
+    const parsed = parseDocumentDto({
+      id: '1',
+      title: 'Alpha',
+      content: 'c1',
+      created_at: '2026-07-11T00:00:00',
+      issued_date: '2024-06-01T00:00:00',
+      expire_date: '2026-06-01T00:00:00',
+    });
+    expect(parsed.issued_date).toBe('2024-06-01T00:00:00');
+    expect(parsed.expire_date).toBe('2026-06-01T00:00:00');
+  });
+
+  it('defaults issued_date and expire_date to null when missing', () => {
+    const parsed = parseDocumentDto({
+      id: '1',
+      title: 'Alpha',
+      content: 'c1',
+      created_at: '2026-07-11T00:00:00',
+    });
+    expect(parsed.issued_date).toBeNull();
+    expect(parsed.expire_date).toBeNull();
   });
 });
