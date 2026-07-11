@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
@@ -16,6 +17,7 @@ pub struct Document {
     pub content: String,
     pub tags: Vec<String>,
     pub user_id: Uuid,
+    pub created_at: chrono::NaiveDateTime,
 }
 
 impl Document {
@@ -27,6 +29,7 @@ impl Document {
             content: String::from(content),
             tags: vec![],
             user_id,
+            created_at: Utc::now().naive_utc(),
         }
     }
 
@@ -37,6 +40,7 @@ impl Document {
         content: &str,
         user_id: Uuid,
         tags: Vec<String>,
+        created_at: chrono::NaiveDateTime,
     ) -> Self {
         Self {
             id,
@@ -44,6 +48,7 @@ impl Document {
             content: String::from(content),
             tags,
             user_id,
+            created_at,
         }
     }
 
@@ -81,6 +86,7 @@ impl Document {
             content: summary,
             tags: vec![],
             user_id: uploaded_document_input.user_id,
+            created_at: Utc::now().naive_utc(),
         };
         Some(document)
     }
@@ -126,6 +132,7 @@ mod tests {
             "This is a test content.",
             user_id,
             vec![],
+            Utc::now().naive_utc(),
         );
         assert_eq!(doc.id, doc_id);
         assert_eq!(doc.title, "Test Document");
@@ -227,6 +234,7 @@ mod tests {
         assert_eq!(doc.content, cloned.content);
         assert_eq!(doc.user_id, cloned.user_id);
         assert_eq!(doc.tags, cloned.tags);
+        assert_eq!(doc.created_at, cloned.created_at);
     }
 
     #[test]
@@ -244,6 +252,7 @@ mod tests {
         assert_eq!(deserialized.title, doc.title);
         assert_eq!(deserialized.content, doc.content);
         assert_eq!(deserialized.user_id, doc.user_id);
+        assert_eq!(deserialized.created_at, doc.created_at);
     }
 
     // Mock implementations for testing from_file

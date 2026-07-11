@@ -9,6 +9,7 @@ pub struct DocumentEntity {
     pub title: String,
     pub content: String,
     pub user_id: String,
+    pub created_at: chrono::NaiveDateTime,
 }
 
 #[derive(Insertable, Debug, Clone)]
@@ -18,4 +19,5 @@ pub struct NewDocumentEntity {
     pub title: String,
     pub content: String,
     pub user_id: String,
+    pub created_at: chrono::NaiveDateTime,
 }

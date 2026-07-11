@@ -15,6 +15,7 @@ pub struct DocumentDto {
     pub title: String,
     pub content: String,
     pub tags: Vec<String>,
+    pub created_at: chrono::NaiveDateTime,
 }
 
 impl DocumentDto {
@@ -24,6 +25,7 @@ impl DocumentDto {
             title: document.title.clone(),
             content: document.content.clone(),
             tags: document.tags.clone(),
+            created_at: document.created_at,
         }
     }
 }
@@ -44,6 +46,7 @@ mod tests {
         assert_eq!(dto.title, "Test Document");
         assert_eq!(dto.content, "This is a test content.");
         assert!(dto.tags.is_empty());
+        assert_eq!(dto.created_at, document.created_at);
     }
 
     #[test]

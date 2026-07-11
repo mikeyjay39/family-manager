@@ -66,6 +66,7 @@ impl DocumentRepository for DocumentOrmCollection {
                         &entity.content,
                         user_id,
                         tags,
+                        entity.created_at,
                     ))
                 }
                 Err(_) => None,
@@ -122,6 +123,7 @@ impl DocumentRepository for DocumentOrmCollection {
                             &e.content,
                             user_id,
                             tags,
+                            e.created_at,
                         ))
                     })
                     .collect(),
@@ -187,6 +189,7 @@ impl DocumentRepository for DocumentOrmCollection {
                             &e.content,
                             user_id,
                             tags,
+                            e.created_at,
                         ))
                     })
                     .collect(),
@@ -206,6 +209,7 @@ impl DocumentRepository for DocumentOrmCollection {
             title: document.title.clone(),
             content: document.content.clone(),
             user_id: document.user_id.to_string(),
+            created_at: document.created_at,
         };
         let tag_names = document.tags.clone();
         let tag_names_for_return = tag_names.clone();
@@ -229,7 +233,7 @@ impl DocumentRepository for DocumentOrmCollection {
 
         match result {
             Ok(success) => match success {
-                Ok(_saved_doc) => {
+                Ok(saved_doc) => {
                     tracing::info!("Document saved with ID: {}", doc_id);
                     Ok(Document::with_id(
                         doc_id,
@@ -237,6 +241,7 @@ impl DocumentRepository for DocumentOrmCollection {
                         &content,
                         user_id,
                         tag_names_for_return,
+                        saved_doc.created_at,
                     ))
                 }
                 Err(e) => {

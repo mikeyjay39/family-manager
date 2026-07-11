@@ -4,6 +4,7 @@ diesel::table! {
         title -> Text,
         content -> Text,
         user_id -> Text,
+        created_at -> Timestamp,
     }
 }
 
