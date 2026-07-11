@@ -86,18 +86,22 @@ The web bundle resolves the active tenant at runtime. Production uses the page h
 
 1. **Default tenant (simplest):** no extra setup — plain `http://localhost:8080` resolves to `life-manager`.
 2. **Env override:** `EXPO_PUBLIC_DEFAULT_TENANT=life-manager` (web localhost / `127.0.0.1`) or `EXPO_PUBLIC_TENANT=life-manager` (native).
-3. **Query param (web):** `http://localhost:8080?tenant=life-manager`
+3. **Query param (web):** `http://localhost:8080?tenant=life-manager` or `?tenant=test-tenant`
 4. **Fake subdomain:** add to `/etc/hosts` then browse the subdomain:
    ```text
    127.0.0.1 life-manager.localhost
+   127.0.0.1 test-tenant.localhost
    ```
-   `life-manager.localhost` is registered for the life-manager tenant in `tenants/life-manager/config.ts`.
+   `life-manager.localhost` and `test-tenant.localhost` are registered in `frontend/lib/tenant/registry.ts`.
 
 Example with host Expo + direct backend:
 
 ```bash
 cd frontend
 EXPO_PUBLIC_DEFAULT_TENANT=life-manager EXPO_PUBLIC_API_BASE_URL=http://localhost:3000 npm run web
+# test-tenant pilot:
+EXPO_PUBLIC_DEFAULT_TENANT=test-tenant EXPO_PUBLIC_API_BASE_URL=http://localhost:3000 npm run web
+# or: http://localhost:8080?tenant=test-tenant
 ```
 
 JWT storage is scoped per tenant (`auth_token:<tenant-id>`) so switching tenants in dev does not reuse the wrong session.

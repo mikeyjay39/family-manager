@@ -22,6 +22,9 @@ backend/
       src/infrastructure/ # HTTP handlers, Diesel, adapters
       src/schema.rs       # Generated — do not hand-edit
       migrations/         # Author SQL here; user runs diesel migration run
+    test-tenant/
+      src/test_tenant.rs  # TestTenant (TenantMount impl, auth-only pilot)
+      src/infrastructure/ # TestTenantState, own DB pool (TEST_TENANT_DATABASE_URL)
   tests/                  # Integration tests
 ```
 
@@ -34,9 +37,10 @@ Rust **edition 2024** (`Cargo.toml`).
 | **`mikeyjay-server`** | HTTP server binary; stateless top-level routes; mounts tenant routers |
 | **`server-host`** | `AppBootstrap` + `TenantMount` trait (build-time composition, not Axum state) |
 | **`auth`** | Shared authentication (`libs/auth/`) |
-| **`life-manager`** | First tenant crate: domain logic, Diesel/SQLite, document API |
+| **`life-manager`** | Primary tenant crate: domain logic, Diesel/SQLite, document API |
+| **`test-tenant`** | Second tenant (pilot): auth-only API; own SQLite pool via `TEST_TENANT_DATABASE_URL` |
 
-`mikeyjay-server` depends on `server-host` + `life-manager`. New product tenants implement `TenantMount` in their own crate; shared auth stays in `auth`.
+`mikeyjay-server` depends on `server-host` + `life-manager` + `test-tenant`. New product tenants implement `TenantMount` in their own crate; shared auth stays in `auth`.
 
 **Naming:** Cargo package `mikeyjay-server`, library crate `life-manager`, binary artifact `life-manager` (see `[[bin]]` in root `Cargo.toml`).
 
@@ -81,7 +85,7 @@ CI runs the same export tests and fails if `frontend/lib/api/generated/` is stal
 
 ## Diesel / SQLite
 
-- Bundled SQLite (`libsqlite3-sys`); `DATABASE_URL` from `.<profile>.env` at the repo root
+- Bundled SQLite (`libsqlite3-sys`); `DATABASE_URL` (life-manager) and `TEST_TENANT_DATABASE_URL` (test-tenant pilot) from `.<profile>.env` at the repo root
 - Agents: edit `libs/life-manager/migrations/*.sql` and `libs/auth/migrations/*.sql` only — never `diesel migration run` or hand-edit `libs/life-manager/src/schema.rs` or `libs/auth/src/schema.rs`
 - User applies migrations per [../README.md](../README.md)
 
@@ -98,3 +102,4 @@ CI runs the same export tests and fails if `frontend/lib/api/generated/` is stal
 | Handler + unit tests + ASCII sequence diagram | `libs/life-manager/src/infrastructure/document/document_handler.rs` (`create_document` doc comment — see hub **Definition of done**) |
 | Router | `libs/life-manager/src/infrastructure/document/document_router.rs` |
 | Integration | `tests/documents_tests.rs` |
+| Multitenancy pilot | `tests/test_tenant_auth_tests.rs`, `libs/test-tenant/` |

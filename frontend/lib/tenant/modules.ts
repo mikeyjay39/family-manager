@@ -2,6 +2,7 @@ import type { TenantModule } from '@/lib/tenant/types';
 
 const moduleLoaders: Record<string, () => TenantModule> = {
   'life-manager': () => require('@/tenants/life-manager/config').lifeManagerTenant,
+  'test-tenant': () => require('@/tenants/test-tenant/config').testTenant,
 };
 
 const cache = new Map<string, TenantModule>();
