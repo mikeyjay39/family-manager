@@ -2,9 +2,23 @@
 
 Prod vhosts are **generated** from [`tenants.prod.json`](tenants.prod.json) and committed as [`generated/tenant-servers.conf.template`](generated/tenant-servers.conf.template).
 
+## tenants.prod.json fields
+
+[`scripts/generate-nginx-tenant-servers.sh`](../scripts/generate-nginx-tenant-servers.sh) reads only the fields below. All tenants get the same vhost shape (API proxy + frontend proxy). JSON does not support comments — this table is the field reference.
+
+| Field | Used by nginx generator? | Purpose |
+|-------|--------------------------|---------|
+| `id` | Indirectly (validates `mountPath`) | Tenant identifier; must match frontend `tenants/<id>/` |
+| `hostname` | Yes | `server_name`, TLS cert path |
+| `mountPath` | Yes | `location <mountPath>/api` proxy block |
+| `default` | Yes | `default_server` on ports 80/443 (exactly one tenant) |
+| `scope` | **No** | Documentation for add-tenant workflow (`auth-only` \| `full`); does not change generated vhosts |
+
+`scope` does not affect nginx, the backend, or the frontend at runtime. It documents intent for humans and the add-tenant skill. Tenant domain ownership is described in [docs/architecture.md](../docs/architecture.md#tenant-domain-boundaries).
+
 ## Add or change a prod tenant
 
-1. Edit `tenants.prod.json` and frontend/backend tenant code (use the **add-tenant** Cursor skill).
+1. Edit `tenants.prod.json` and frontend/backend tenant code (use the **add-tenant** Cursor skill). See [tenants.prod.json fields](#tenantsprodjson-fields) — `scope` is not used by nginx.
 2. Run locally:
 
    ```bash
