@@ -140,9 +140,10 @@ sequenceDiagram
   GH->>LS: SSH git pull and deploy-prod-lightsail.sh
   LS->>ECR: docker compose pull prod images
   LS->>LS: docker compose up -d prod profile
+  LS->>LS: force-recreate gateway no-deps
 ```
 
-Image URLs are set in **`.prod.env`** at the repo root (`LIFE_MANAGER_*_IMAGE`). The deploy script is [`scripts/deploy-prod-lightsail.sh`](../scripts/deploy-prod-lightsail.sh).
+Image URLs are set in **`.prod.env`** at the repo root (`LIFE_MANAGER_*_IMAGE`). The deploy script is [`scripts/deploy-prod-lightsail.sh`](../scripts/deploy-prod-lightsail.sh). The gateway is always recreated after `up -d` so nginx re-resolves fresh upstream container IPs (avoids 502 when only backend/frontend images change).
 
 ## Dev, test, and prod profiles
 
