@@ -163,6 +163,7 @@ export function LoginForm({ onSubmit, loading: externalLoading = false }: LoginF
         ]}
         onPress={() => void handleLogin()}
         disabled={isBusy}
+        accessibilityRole="button"
         accessibilityLabel="Sign in button"
         accessibilityHint="Tap to sign in with your credentials"
       >

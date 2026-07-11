@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
-import { router, Link } from 'expo-router';
+import { StyleSheet, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
 
 import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
@@ -54,6 +54,7 @@ export default function HomeScreen() {
               },
             ]}
             onPress={() => setLogoutDialogVisible(true)}
+            accessibilityRole="button"
             accessibilityLabel="Log out button"
             accessibilityHint="Tap to log out of your account"
           >
@@ -63,59 +64,9 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </ThemedView>
         <ThemedView style={styles.stepContainer}>
-          <ThemedText type="subtitle">Add Document</ThemedText>
+          <ThemedText type="subtitle">Documents</ThemedText>
           <DocumentCreateForm />
           <DocumentList />
-          <ThemedText>
-            Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-            Press{' '}
-            <ThemedText type="defaultSemiBold">
-              {Platform.select({
-                ios: 'cmd + d',
-                android: 'cmd + m',
-                web: 'F12',
-              })}
-            </ThemedText>{' '}
-            to open developer tools.
-          </ThemedText>
-        </ThemedView>
-        <ThemedView style={styles.stepContainer}>
-          <Link href="/modal">
-            <Link.Trigger>
-              <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-            </Link.Trigger>
-            <Link.Preview />
-            <Link.Menu>
-              <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-              <Link.MenuAction
-                title="Share"
-                icon="square.and.arrow.up"
-                onPress={() => alert('Share pressed')}
-              />
-              <Link.Menu title="More" icon="ellipsis">
-                <Link.MenuAction
-                  title="Delete"
-                  icon="trash"
-                  destructive
-                  onPress={() => alert('Delete pressed')}
-                />
-              </Link.Menu>
-            </Link.Menu>
-          </Link>
-
-          <ThemedText>
-            {`Tap the Explore tab to learn more about what's included in this starter app.`}
-          </ThemedText>
-        </ThemedView>
-        <ThemedView style={styles.stepContainer}>
-          <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-          <ThemedText>
-            {`When you're ready, run `}
-            <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-            <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-            <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-            <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-          </ThemedText>
         </ThemedView>
       </ParallaxScrollView>
       <ConfirmDialog

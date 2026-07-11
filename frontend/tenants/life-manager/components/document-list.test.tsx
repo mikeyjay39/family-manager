@@ -54,7 +54,7 @@ describe('DocumentList', () => {
     expect(screen.getByText('Sign in to see your documents.')).toBeTruthy();
   });
 
-  it('loads and lists document titles', async () => {
+  it('loads and lists document titles in the spreadsheet grid', async () => {
     mockAuthenticatedFetch.mockResolvedValue(
       new Response(
         JSON.stringify([
@@ -69,10 +69,40 @@ describe('DocumentList', () => {
       expect(screen.getByText('Alpha')).toBeTruthy();
     });
     expect(screen.getByText('Beta')).toBeTruthy();
+    expect(screen.getByText('Title')).toBeTruthy();
+    expect(screen.getByText('Content')).toBeTruthy();
+    expect(screen.getByText('Tags')).toBeTruthy();
+    expect(screen.getByText('Created')).toBeTruthy();
+    expect(screen.getByText('Issued')).toBeTruthy();
+    expect(screen.getByText('Expires')).toBeTruthy();
     expect(mockAuthenticatedFetch).toHaveBeenCalledWith(
       '/documents',
       expect.objectContaining({ method: 'GET', token: 'tok' })
     );
+  });
+
+  it('formats tags and nullable dates in grid cells', async () => {
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: '1',
+            title: 'Tagged Doc',
+            content: 'Body',
+            tags: ['tax', '2024'],
+            created_at: '2026-07-11T00:00:00',
+            issued_date: '2024-06-01T00:00:00',
+            expire_date: null,
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('tax, 2024')).toBeTruthy();
+    });
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows error when fetch fails', async () => {
@@ -100,7 +130,7 @@ describe('DocumentList', () => {
       expect(screen.getByText('Doc A')).toBeTruthy();
     });
     fireEvent.press(screen.getByLabelText('Open document Doc A'));
-    expect(screen.getByText('Body text')).toBeTruthy();
+    expect(screen.getAllByText('Body text').length).toBeGreaterThanOrEqual(2);
     fireEvent.press(screen.getByText('Close'));
   });
 });
