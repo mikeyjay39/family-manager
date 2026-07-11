@@ -107,6 +107,7 @@ export default function HomeScreen() {
               },
             ]}
             onPress={() => setLogoutDialogVisible(true)}
+            accessibilityRole="button"
             accessibilityLabel="Log out button"
             accessibilityHint="Tap to log out of your account">
             <ThemedText style={[styles.logoutButtonText, { color: palette.onTint }]}>

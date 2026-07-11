@@ -174,6 +174,8 @@ export default function DocumentList() {
           style={styles.refreshButton}
           onPress={() => void load()}
           disabled={loading || !token}
+          accessibilityRole="button"
+          accessibilityLabel={loading ? 'Loading documents' : 'Refresh documents'}
         >
           <Text style={styles.refreshButtonText}>{loading ? 'Loading…' : 'Refresh'}</Text>
         </TouchableOpacity>
@@ -215,7 +217,12 @@ export default function DocumentList() {
               <Text style={styles.modalTitle}>{selected?.title ?? ''}</Text>
               <Text style={styles.modalContent}>{selected?.content ?? ''}</Text>
             </ScrollView>
-            <TouchableOpacity style={styles.modalClose} onPress={() => setSelected(null)}>
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => setSelected(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Close document"
+            >
               <Text style={styles.modalCloseText}>Close</Text>
             </TouchableOpacity>
           </View>

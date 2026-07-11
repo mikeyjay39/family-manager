@@ -217,7 +217,13 @@ export default function DocumentCreateForm() {
 
       <Text style={styles.label}>File (optional)</Text>
       <View style={styles.fileRow}>
-        <TouchableOpacity style={styles.secondaryButton} onPress={pickFile} disabled={loading}>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={pickFile}
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Choose file"
+        >
           <Text style={styles.secondaryButtonText}>Choose file</Text>
         </TouchableOpacity>
         {pickedFile ? (
@@ -225,7 +231,12 @@ export default function DocumentCreateForm() {
             <Text style={styles.fileName} numberOfLines={1}>
               {pickedFile.name}
             </Text>
-            <TouchableOpacity onPress={clearFile} disabled={loading}>
+            <TouchableOpacity
+              onPress={clearFile}
+              disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel="Clear selected file"
+            >
               <Text style={styles.clearLink}>Clear</Text>
             </TouchableOpacity>
           </>
@@ -238,6 +249,8 @@ export default function DocumentCreateForm() {
         style={[styles.submitButton, loading && styles.buttonDisabled]}
         onPress={handleSubmit}
         disabled={loading}
+        accessibilityRole="button"
+        accessibilityLabel={loading ? 'Submitting document' : 'Create document'}
       >
         <Text style={styles.submitButtonText}>{loading ? 'Submitting…' : 'Create document'}</Text>
       </TouchableOpacity>
