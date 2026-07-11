@@ -57,11 +57,64 @@ fn is_in_memory_sqlite(database_url: &str) -> bool {
         || database_url.starts_with("file:") && database_url.contains("mode=memory")
 }
 
-pub async fn run_migrations(pool: &Pool) -> bool {
+pub async fn run_migrations(pool: &Pool) {
     let conn = pool.get().await.expect("Failed to get DB connection");
-    let _ = conn
-        .interact(|conn_inner| conn_inner.run_pending_migrations(MIGRATIONS).map(|_| ()))
+    conn.interact(|conn_inner| conn_inner.run_pending_migrations(MIGRATIONS).map(|_| ()))
         .await
-        .expect("Failed to run migrations");
-    true
+        .expect("Failed to run life-manager migrations interact")
+        .expect("Failed to run pending life-manager migrations");
+}
+
+#[cfg(test)]
+mod migration_tests {
+    use std::sync::Arc;
+
+    use diesel::RunQueryDsl;
+    use uuid::Uuid;
+
+    use crate::application::document_repository::DocumentRepository;
+    use crate::infrastructure::document::document_orm_collection::DocumentOrmCollection;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn run_migrations_applies_created_at_to_legacy_schema() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_url = format!("file:{}/legacy.db", dir.path().display());
+        let pool = Arc::new(create_connection_pool_from_url(&db_url));
+
+        run_migrations(pool.as_ref()).await;
+
+        let conn = pool.get().await.expect("pool connection");
+        conn.interact(|conn| -> Result<(), diesel::result::Error> {
+            diesel::sql_query(
+                "DELETE FROM __diesel_schema_migrations WHERE version = '20260711000000'",
+            )
+            .execute(conn)?;
+            diesel::sql_query("ALTER TABLE documents DROP COLUMN expire_date").execute(conn)?;
+            diesel::sql_query("ALTER TABLE documents DROP COLUMN issued_date").execute(conn)?;
+            diesel::sql_query("ALTER TABLE documents DROP COLUMN created_at").execute(conn)?;
+            diesel::sql_query(
+                "INSERT INTO documents (id, title, content, user_id) VALUES ('00000000-0000-0000-0000-0000000000aa', 'legacy', 'content', '00000000-0000-0000-0000-000000000001')",
+            )
+            .execute(conn)?;
+            Ok(())
+        })
+        .await
+        .expect("legacy downgrade interact")
+        .expect("legacy downgrade");
+
+        let repo = DocumentOrmCollection::new(pool.clone());
+        let user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        assert!(
+            repo.get_documents(&user_id, &100).await.is_empty(),
+            "legacy schema should return no documents before migration"
+        );
+
+        run_migrations(pool.as_ref()).await;
+
+        let docs = repo.get_documents(&user_id, &100).await;
+        assert_eq!(docs.len(), 1, "documents should load after migration");
+        assert_eq!(docs[0].title, "legacy");
+    }
 }
