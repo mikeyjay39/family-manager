@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { authenticatedFetch } from '@/lib/api/client';
 import type { DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
+import { withAlpha } from '@/lib/tenant/theme/color-utils';
 
 export function parseDocumentDto(item: unknown): DocumentDto {
   const d = item as Record<string, unknown>;
@@ -54,8 +55,7 @@ export default function DocumentList() {
           color: palette.text,
         },
         refreshButton: {
-          backgroundColor: palette.icon,
-          opacity: 0.2,
+          backgroundColor: withAlpha(palette.icon, 0.2),
           borderRadius: 8,
           paddingVertical: 8,
           paddingHorizontal: 12,

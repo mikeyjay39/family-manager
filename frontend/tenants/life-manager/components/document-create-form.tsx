@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api/client';
 import type { CreateDocumentCommand, DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
+import { withAlpha } from '@/lib/tenant/theme/color-utils';
 
 function parseTags(input: string): string[] {
   return input
@@ -55,8 +56,7 @@ export default function DocumentCreateForm() {
           marginBottom: 8,
         },
         secondaryButton: {
-          backgroundColor: palette.icon,
-          opacity: 0.2,
+          backgroundColor: withAlpha(palette.icon, 0.2),
           borderRadius: 8,
           paddingVertical: 10,
           paddingHorizontal: 14,
