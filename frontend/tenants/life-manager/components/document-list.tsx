@@ -13,6 +13,7 @@ import { authenticatedFetch } from '@/lib/api/client';
 import type { DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
 import { withAlpha } from '@/lib/tenant/theme/color-utils';
+import DocumentGrid from './document-grid';
 
 export function parseDocumentDto(item: unknown): DocumentDto {
   const d = item as Record<string, unknown>;
@@ -42,7 +43,7 @@ export default function DocumentList() {
           gap: 8,
           marginTop: 16,
         },
-        headerRow: {
+        toolbarRow: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -63,17 +64,6 @@ export default function DocumentList() {
         refreshButtonText: {
           fontSize: 14,
           fontWeight: '600',
-          color: palette.text,
-        },
-        row: {
-          borderWidth: 1,
-          borderColor: palette.icon,
-          borderRadius: 8,
-          padding: 12,
-          marginBottom: 4,
-        },
-        rowTitle: {
-          fontSize: 16,
           color: palette.text,
         },
         hint: {
@@ -168,7 +158,7 @@ export default function DocumentList() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
+      <View style={styles.toolbarRow}>
         <Text style={styles.sectionTitle}>Your documents</Text>
         <TouchableOpacity
           style={styles.refreshButton}
@@ -190,19 +180,7 @@ export default function DocumentList() {
       ) : documents.length === 0 ? (
         <Text style={styles.hint}>No documents yet.</Text>
       ) : (
-        documents.map((doc) => (
-          <TouchableOpacity
-            key={doc.id}
-            style={styles.row}
-            onPress={() => setSelected(doc)}
-            accessibilityRole="button"
-            accessibilityLabel={`Open document ${doc.title}`}
-          >
-            <Text style={styles.rowTitle} numberOfLines={2}>
-              {doc.title || '(Untitled)'}
-            </Text>
-          </TouchableOpacity>
-        ))
+        <DocumentGrid documents={documents} onRowPress={setSelected} />
       )}
 
       <Modal
