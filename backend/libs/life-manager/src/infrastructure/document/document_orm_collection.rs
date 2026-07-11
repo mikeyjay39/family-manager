@@ -67,6 +67,8 @@ impl DocumentRepository for DocumentOrmCollection {
                         user_id,
                         tags,
                         entity.created_at,
+                        entity.issued_date,
+                        entity.expire_date,
                     ))
                 }
                 Err(_) => None,
@@ -124,6 +126,8 @@ impl DocumentRepository for DocumentOrmCollection {
                             user_id,
                             tags,
                             e.created_at,
+                            e.issued_date,
+                            e.expire_date,
                         ))
                     })
                     .collect(),
@@ -190,6 +194,8 @@ impl DocumentRepository for DocumentOrmCollection {
                             user_id,
                             tags,
                             e.created_at,
+                            e.issued_date,
+                            e.expire_date,
                         ))
                     })
                     .collect(),
@@ -210,6 +216,8 @@ impl DocumentRepository for DocumentOrmCollection {
             content: document.content.clone(),
             user_id: document.user_id.to_string(),
             created_at: document.created_at,
+            issued_date: document.issued_date,
+            expire_date: document.expire_date,
         };
         let tag_names = document.tags.clone();
         let tag_names_for_return = tag_names.clone();
@@ -242,6 +250,8 @@ impl DocumentRepository for DocumentOrmCollection {
                         user_id,
                         tag_names_for_return,
                         saved_doc.created_at,
+                        saved_doc.issued_date,
+                        saved_doc.expire_date,
                     ))
                 }
                 Err(e) => {

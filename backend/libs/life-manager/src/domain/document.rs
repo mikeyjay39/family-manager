@@ -18,6 +18,8 @@ pub struct Document {
     pub tags: Vec<String>,
     pub user_id: Uuid,
     pub created_at: chrono::NaiveDateTime,
+    pub issued_date: Option<chrono::NaiveDateTime>,
+    pub expire_date: Option<chrono::NaiveDateTime>,
 }
 
 impl Document {
@@ -30,6 +32,8 @@ impl Document {
             tags: vec![],
             user_id,
             created_at: Utc::now().naive_utc(),
+            issued_date: None,
+            expire_date: None,
         }
     }
 
@@ -41,6 +45,8 @@ impl Document {
         user_id: Uuid,
         tags: Vec<String>,
         created_at: chrono::NaiveDateTime,
+        issued_date: Option<chrono::NaiveDateTime>,
+        expire_date: Option<chrono::NaiveDateTime>,
     ) -> Self {
         Self {
             id,
@@ -49,6 +55,8 @@ impl Document {
             tags,
             user_id,
             created_at,
+            issued_date,
+            expire_date,
         }
     }
 
@@ -87,6 +95,8 @@ impl Document {
             tags: vec![],
             user_id: uploaded_document_input.user_id,
             created_at: Utc::now().naive_utc(),
+            issued_date: None,
+            expire_date: None,
         };
         Some(document)
     }
@@ -133,6 +143,8 @@ mod tests {
             user_id,
             vec![],
             Utc::now().naive_utc(),
+            None,
+            None,
         );
         assert_eq!(doc.id, doc_id);
         assert_eq!(doc.title, "Test Document");
@@ -235,6 +247,8 @@ mod tests {
         assert_eq!(doc.user_id, cloned.user_id);
         assert_eq!(doc.tags, cloned.tags);
         assert_eq!(doc.created_at, cloned.created_at);
+        assert_eq!(doc.issued_date, cloned.issued_date);
+        assert_eq!(doc.expire_date, cloned.expire_date);
     }
 
     #[test]
@@ -253,6 +267,8 @@ mod tests {
         assert_eq!(deserialized.content, doc.content);
         assert_eq!(deserialized.user_id, doc.user_id);
         assert_eq!(deserialized.created_at, doc.created_at);
+        assert_eq!(deserialized.issued_date, doc.issued_date);
+        assert_eq!(deserialized.expire_date, doc.expire_date);
     }
 
     // Mock implementations for testing from_file

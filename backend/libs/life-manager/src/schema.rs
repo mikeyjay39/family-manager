@@ -5,6 +5,8 @@ diesel::table! {
         content -> Text,
         user_id -> Text,
         created_at -> Timestamp,
+        issued_date -> Nullable<Timestamp>,
+        expire_date -> Nullable<Timestamp>,
     }
 }
 

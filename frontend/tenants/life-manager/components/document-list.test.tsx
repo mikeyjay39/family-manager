@@ -144,4 +144,28 @@ describe('parseDocumentDto', () => {
       }).created_at
     ).toBe('2026-07-11T12:34:56');
   });
+
+  it('maps nullable issued_date and expire_date', () => {
+    const parsed = parseDocumentDto({
+      id: '1',
+      title: 'Alpha',
+      content: 'c1',
+      created_at: '2026-07-11T00:00:00',
+      issued_date: '2024-06-01T00:00:00',
+      expire_date: '2026-06-01T00:00:00',
+    });
+    expect(parsed.issued_date).toBe('2024-06-01T00:00:00');
+    expect(parsed.expire_date).toBe('2026-06-01T00:00:00');
+  });
+
+  it('defaults issued_date and expire_date to null when missing', () => {
+    const parsed = parseDocumentDto({
+      id: '1',
+      title: 'Alpha',
+      content: 'c1',
+      created_at: '2026-07-11T00:00:00',
+    });
+    expect(parsed.issued_date).toBeNull();
+    expect(parsed.expire_date).toBeNull();
+  });
 });

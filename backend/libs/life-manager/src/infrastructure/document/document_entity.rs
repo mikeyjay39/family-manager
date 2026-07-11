@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -9,7 +10,9 @@ pub struct DocumentEntity {
     pub title: String,
     pub content: String,
     pub user_id: String,
-    pub created_at: chrono::NaiveDateTime,
+    pub created_at: NaiveDateTime,
+    pub issued_date: Option<NaiveDateTime>,
+    pub expire_date: Option<NaiveDateTime>,
 }
 
 #[derive(Insertable, Debug, Clone)]
@@ -19,5 +22,7 @@ pub struct NewDocumentEntity {
     pub title: String,
     pub content: String,
     pub user_id: String,
-    pub created_at: chrono::NaiveDateTime,
+    pub created_at: NaiveDateTime,
+    pub issued_date: Option<NaiveDateTime>,
+    pub expire_date: Option<NaiveDateTime>,
 }
