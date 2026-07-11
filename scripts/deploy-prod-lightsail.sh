@@ -31,6 +31,8 @@ cd "${DEPLOY_PATH}"
 
 echo "Deploying prod stack (:latest images) for commit ${GITHUB_SHA}"
 
+"${DEPLOY_PATH}/scripts/provision-tenant-tls.sh"
+
 compose pull
 compose up -d
 # Nginx resolves upstream hostnames once at startup; when only backend/frontend

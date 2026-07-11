@@ -44,6 +44,35 @@ Each tenant crate implements `TenantMount`, builds its own state (including DB p
 
 Diesel migrations and schema live in **`backend/libs/life-manager/`** (see **`backend/diesel.toml`**) and **`backend/libs/auth/`** (see **`backend/libs/auth/diesel.toml`**). Life-manager startup runs life-manager migrations on its pool; auth migrations run when `AuthStateBuilder` builds auth state for that tenant.
 
+## Tenant domain boundaries
+
+Multitenancy is **composition-based**: each product tenant is a separate Rust crate implementing `TenantMount`, with its own SQLite file, state builder, and API router. Only **`auth`** is shared across tenants today; domain aggregates and tenant UI are not inherited automatically.
+
+| Layer | Shared? | Where |
+|-------|---------|-------|
+| Auth (login, JWT, `auth_users`) | Yes | `backend/libs/auth/` — mounted per tenant |
+| Domain aggregates (Document, etc.) | No (today) | `backend/libs/life-manager/` only |
+| Tenant UI (document list/form) | No (today) | `frontend/tenants/life-manager/` only |
+
+```mermaid
+flowchart LR
+  subgraph shared["Shared libs"]
+    authCrate["auth"]
+  end
+  subgraph tenants["Tenant crates"]
+    lm["life-manager\nauth + documents"]
+    tt["test-tenant\nauth only"]
+  end
+  authCrate --> lm
+  authCrate --> tt
+```
+
+**Rules:**
+
+- Adding a tenant does **not** copy life-manager routes or UI. The new crate must explicitly wire the routes and state it needs (see `life_manager_tenant.rs` vs `test_tenant.rs`).
+- A `full` entry in [`nginx/tenants.prod.json`](../nginx/tenants.prod.json) means “mirror life-manager when authoring the tenant by hand” — not automatic inclusion of documents. See [nginx/README.md](../nginx/README.md#tenantsprodjson-fields) for which registry fields nginx actually reads.
+- Procedural checklist for new tenants: [`.cursor/skills/add-tenant/SKILL.md`](../.cursor/skills/add-tenant/SKILL.md).
+
 ## HTTP routing
 
 In production, browsers hit the **gateway** (nginx). The gateway forwards API traffic to the Rust server and static assets to the frontend container. In dev, the Expo app usually talks directly to the backend on **`APP_PORT`**.
@@ -122,7 +151,7 @@ The **`alloy`** log shipper also runs under the **docker-dev** profile (same con
 
 The prod frontend build defaults to an empty **`EXPO_PUBLIC_API_BASE_URL`**, so the browser uses same-origin paths (via the gateway). Override with a full origin when the API is on another host (e.g. physical devices on the LAN).
 
-See **`docker-compose.yml`** header comments and **`nginx/templates/default.conf.template`** for proxy rules.
+See **`docker-compose.yml`** header comments and **`nginx/generated/tenant-servers.conf.template`** (generated from **`nginx/tenants.prod.json`**) for proxy rules. Regenerate with **`./scripts/generate-nginx-tenant-servers.sh`** — see **`nginx/README.md`**.
 
 ### CI deploy to AWS (merge to `main`)
 

@@ -71,7 +71,10 @@ impl DocumentRepository for DocumentOrmCollection {
                         entity.expire_date,
                     ))
                 }
-                Err(_) => None,
+                Err(e) => {
+                    tracing::error!("Database error retrieving document {}: {}", id, e);
+                    None
+                }
             },
             Err(e) => {
                 tracing::error!("Error retrieving document: {}", e);
@@ -131,7 +134,10 @@ impl DocumentRepository for DocumentOrmCollection {
                         ))
                     })
                     .collect(),
-                Err(_) => vec![],
+                Err(e) => {
+                    tracing::error!("Database error retrieving documents: {}", e);
+                    vec![]
+                }
             },
             Err(e) => {
                 tracing::error!("Error retrieving documents: {}", e);
@@ -199,10 +205,13 @@ impl DocumentRepository for DocumentOrmCollection {
                         ))
                     })
                     .collect(),
-                Err(_) => vec![],
+                Err(e) => {
+                    tracing::error!("Database error retrieving documents by title cursor: {}", e);
+                    vec![]
+                }
             },
             Err(e) => {
-                tracing::error!("Error retrieving documents: {}", e);
+                tracing::error!("Error retrieving documents by title cursor: {}", e);
                 vec![]
             }
         }

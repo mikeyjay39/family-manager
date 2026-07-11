@@ -94,6 +94,14 @@ The web bundle resolves the active tenant at runtime. Production uses the page h
    ```
    `life-manager.localhost` and `test-tenant.localhost` are registered in `frontend/lib/tenant/registry.ts`.
 
+Prod TLS uses **separate Let's Encrypt certs per tenant hostname** (see `nginx/tenants.prod.json`). After adding a tenant:
+
+1. Add DNS A record: `<tenant-id>.jeszenka.com` → server IP  
+2. Use the **add-tenant** Cursor skill (`.cursor/skills/add-tenant/`)  
+3. Deploy — `scripts/provision-tenant-tls.sh` runs on the server before gateway restart  
+
+Regenerate committed nginx locally: `./scripts/generate-nginx-tenant-servers.sh`
+
 Example with host Expo + direct backend:
 
 ```bash

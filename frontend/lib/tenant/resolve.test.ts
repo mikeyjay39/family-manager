@@ -31,6 +31,16 @@ describe('resolveTenantId', () => {
     ).toEqual({ tenantId: 'test-tenant', source: 'hostname' });
   });
 
+  it('resolves test-tenant production hostname from the registry', () => {
+    expect(
+      resolveTenantId({
+        platform: 'web',
+        hostname: 'test-tenant.jeszenka.com',
+        search: '',
+      })
+    ).toEqual({ tenantId: 'test-tenant', source: 'hostname' });
+  });
+
   it('uses ?tenant=test-tenant on localhost', () => {
     expect(
       resolveTenantId({
