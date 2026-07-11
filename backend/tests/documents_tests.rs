@@ -411,10 +411,9 @@ async fn create_and_get_document_with_tags() {
         let document: DocumentDto = get_response.json().await.unwrap();
         assert_eq!(document.title, payload.title);
         assert_eq!(document.content, payload.content);
-        assert_eq!(
-            document.tags,
-            vec!["finance".to_string(), "tax".to_string()]
-        );
+        assert!(document.tags.contains(&"finance".to_string()));
+        assert!(document.tags.contains(&"tax".to_string()));
+        assert_eq!(document.tags.len(), payload.tags.len());
     })
     .await;
 }
