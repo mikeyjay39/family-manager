@@ -21,6 +21,7 @@ zeroize = "1.7"
 name = "mikeyjay-server"
 version = "0.1.0"
 edition = "2024"
+license-file = "../LICENSE"
 
 [[bin]]
 name = "life-manager"

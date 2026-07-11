@@ -208,3 +208,11 @@ flowchart TD
     Did[DocumentId]
     A[Alert]
 ```
+
+## License
+
+Copyright (c) 2026 Michael Jeszenka. All rights reserved.
+
+This repository is public for portfolio purposes. You may view the code, but
+you may not copy, modify, distribute, or use it without prior written
+permission. See [LICENSE](LICENSE) for the full terms.
