@@ -12,8 +12,9 @@ Update this file and the hub when frontend conventions change.
 | `components/` | Shared UI; co-locate `*.test.tsx` |
 | `components/ui/` | Shared primitives (`confirm-dialog.tsx` for themed confirmations) |
 | `components/auth/` | Shared auth UI (`login-form.tsx`) |
-| `contexts/` | `AuthContext` (tenant-scoped token + login) |
+| `contexts/` | `AuthContext` (tenant-scoped token + login), `ProtonConnectContext` (web Proton Drive session) |
 | `lib/tenant/` | Tenant registry, resolution, `TenantProvider`, `useTenant()` |
+| `lib/proton-drive/` | Web-only Proton Drive SDK integration (`index.web.ts`); native stub in `index.ts` |
 | `lib/tenant/theme/` | Theme types, defaults, `mergeTenantTheme()`, `TenantThemeProvider` |
 | `lib/api/` | `client.ts` — `apiFetch`, `authenticatedFetch`, `apiV1`; `types.ts` — generated API DTOs |
 | `lib/api/generated/` | ts-rs output from Rust — **do not hand-edit** (see `generated/README.md`) |
@@ -34,7 +35,9 @@ Use `@/` path alias (`tsconfig.json`).
 
 ## Tenant theme and branding
 
-Provider order: `TenantProvider` → `TenantThemeProvider` → `AuthProvider` (see `app/_layout.tsx`).
+Provider order: `TenantProvider` → `TenantThemeProvider` → `AuthProvider` → `ProtonConnectProvider` (see `app/_layout.tsx`).
+
+**Proton Drive:** `lib/proton-drive/` is resolved to `index.web.ts` on web and `index.ts` (no-op) on native. Document file uploads on web require an active Proton session; native keeps multipart POST to `/documents`.
 
 Optional `theme` block on `tenants/<id>/meta.ts` — all fields optional; unspecified values use app defaults from `lib/tenant/theme/defaults.ts`:
 

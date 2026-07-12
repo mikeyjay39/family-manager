@@ -7,6 +7,11 @@ diesel::table! {
         created_at -> Timestamp,
         issued_date -> Nullable<Timestamp>,
         expire_date -> Nullable<Timestamp>,
+        storage_provider -> Nullable<Text>,
+        storage_share_id -> Nullable<Text>,
+        storage_node_id -> Nullable<Text>,
+        storage_filename -> Nullable<Text>,
+        storage_mime_type -> Nullable<Text>,
     }
 }
 

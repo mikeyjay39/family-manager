@@ -1,5 +1,6 @@
 use crate::application::get_documents_query::{GetDocumentsQuery, GetDocumentsTitleCursorQuery};
 use crate::domain::document::Document;
+use crate::domain::document_storage_ref::STORAGE_PROVIDER_PROTON_DRIVE;
 use crate::domain::uploaded_document_input::UploadedDocumentInput;
 use crate::infrastructure::document::document_api_types::{
     CreateDocumentCommand, GetDocumentsQueryParams,
@@ -101,6 +102,65 @@ pub async fn create_document(
     }
 }
 
+/// Creates a document from JSON metadata and an external storage reference (Proton Drive).
+/// +---------+     +------------------+     +------------------+
+/// |         |     | Handler          |     | SQLite           |
+/// | WebApp  |---->| create_document  |---->| documents        |
+/// |         |     | _json            |     | tags/document_tags|
+/// +---------+     +------------------+     +------------------+
+pub async fn create_document_json(
+    AuthUser {
+        user_id,
+        tenant: _tenant,
+    }: AuthUser,
+    State(DocumentState(document_use_cases)): State<DocumentState>,
+    Json(payload): Json<CreateDocumentCommand>,
+) -> ApiResult<DocumentDto> {
+    let storage = match payload.storage.as_ref() {
+        Some(storage) if storage.is_valid_proton_drive() => Some(storage.clone().into_domain()),
+        Some(_) => {
+            return AppResponse::validation_error(
+                "storage must be a valid proton_drive reference with share_id, node_id, and filename",
+            );
+        }
+        None => {
+            return AppResponse::validation_error(
+                "JSON document create requires storage metadata; use multipart POST /documents for file uploads",
+            );
+        }
+    };
+
+    if storage
+        .as_ref()
+        .is_some_and(|s| s.provider != STORAGE_PROVIDER_PROTON_DRIVE)
+    {
+        return AppResponse::validation_error("Only proton_drive storage is supported");
+    }
+
+    let mut document = Document::new_with_storage(
+        &payload.title,
+        &payload.content,
+        user_id,
+        storage,
+    );
+    document.tags = normalize_tag_names(&payload.tags);
+    document.issued_date = payload.issued_date;
+    document.expire_date = payload.expire_date;
+    document.print_details();
+
+    let repo = document_use_cases.document_repository.clone();
+    match repo.save_document(document).await {
+        Err(e) => {
+            tracing::error!("Error saving document: {}", e);
+            AppResponse::internal_error(e)
+        }
+        Ok(saved_doc) => {
+            tracing::info!("Document saved from JSON: {:?}", saved_doc.title);
+            AppResponse::created(DocumentDto::from_document(&saved_doc))
+        }
+    }
+}
+
 pub async fn get_document(
     AuthUser {
         user_id: _,
@@ -181,6 +241,8 @@ mod tests {
     use crate::domain::document_summarizer::{DocumentSummarizer, DocumentSummaryResult};
     use crate::domain::document_text_reader::DocumentTextReader;
     use crate::infrastructure::document::document_collection::DocumentCollection;
+
+    use crate::infrastructure::document::document_api_types::DocumentStorageRefDto;
 
     use super::*;
     use async_trait::async_trait;
@@ -277,6 +339,7 @@ mod tests {
             tags: vec!["Tax".to_string()],
             issued_date: None,
             expire_date: None,
+            storage: None,
         };
 
         let document_use_cases = Arc::new(DocumentUseCases {
@@ -340,6 +403,122 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn given_valid_proton_storage_when_creating_document_json_then_returns_created() {
+        let payload = CreateDocumentCommand {
+            title: String::from("Proton Doc"),
+            content: String::from("Manual content."),
+            tags: vec!["drive".to_string()],
+            issued_date: None,
+            expire_date: None,
+            storage: Some(DocumentStorageRefDto {
+                provider: STORAGE_PROVIDER_PROTON_DRIVE.to_string(),
+                share_id: "share-123".to_string(),
+                node_id: "node-456".to_string(),
+                filename: "scan.pdf".to_string(),
+                mime_type: Some("application/pdf".to_string()),
+            }),
+        };
+        let document_use_cases = Arc::new(DocumentUseCases {
+            document_repository: Arc::new(DocumentCollection::new()),
+            reader: Arc::new(MockDocumentTextReader {}),
+            summarizer: Arc::new(MockDocumentSummarizer {}),
+        });
+
+        let response = create_document_json(
+            test_auth_user(),
+            State(DocumentState(document_use_cases)),
+            Json(payload),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read body");
+        let response_document: DocumentDto =
+            from_slice(&bytes).expect("Failed to deserialize body");
+        assert_eq!(response_document.title, "Proton Doc");
+        assert_eq!(
+            response_document.storage.as_ref().map(|s| s.filename.as_str()),
+            Some("scan.pdf")
+        );
+    }
+
+    #[tokio::test]
+    async fn given_missing_storage_when_creating_document_json_then_returns_validation_error() {
+        let payload = CreateDocumentCommand {
+            title: String::from("No storage"),
+            content: String::from("content"),
+            tags: vec![],
+            issued_date: None,
+            expire_date: None,
+            storage: None,
+        };
+        let document_use_cases = Arc::new(DocumentUseCases {
+            document_repository: Arc::new(DocumentCollection::new()),
+            reader: Arc::new(MockDocumentTextReader {}),
+            summarizer: Arc::new(MockDocumentSummarizer {}),
+        });
+
+        let response = create_document_json(
+            test_auth_user(),
+            State(DocumentState(document_use_cases)),
+            Json(payload),
+        )
+        .await
+        .into_response();
+
+        assert_api_error_response(
+            response,
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "JSON document create requires storage metadata; use multipart POST /documents for file uploads",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn given_invalid_proton_storage_when_creating_document_json_then_returns_validation_error(
+    ) {
+        let payload = CreateDocumentCommand {
+            title: String::from("Bad storage"),
+            content: String::from("content"),
+            tags: vec![],
+            issued_date: None,
+            expire_date: None,
+            storage: Some(DocumentStorageRefDto {
+                provider: STORAGE_PROVIDER_PROTON_DRIVE.to_string(),
+                share_id: String::new(),
+                node_id: "node".to_string(),
+                filename: "file.pdf".to_string(),
+                mime_type: None,
+            }),
+        };
+        let document_use_cases = Arc::new(DocumentUseCases {
+            document_repository: Arc::new(DocumentCollection::new()),
+            reader: Arc::new(MockDocumentTextReader {}),
+            summarizer: Arc::new(MockDocumentSummarizer {}),
+        });
+
+        let response = create_document_json(
+            test_auth_user(),
+            State(DocumentState(document_use_cases)),
+            Json(payload),
+        )
+        .await
+        .into_response();
+
+        assert_api_error_response(
+            response,
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "storage must be a valid proton_drive reference with share_id, node_id, and filename",
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn given_multipart_without_json_when_creating_document_then_returns_validation_error() {
         // Given
         let document_use_cases = Arc::new(DocumentUseCases {
@@ -377,6 +556,7 @@ mod tests {
             tags: vec![],
             issued_date: None,
             expire_date: None,
+            storage: None,
         };
         let document_use_cases = Arc::new(DocumentUseCases {
             document_repository: Arc::new(DocumentCollection::new()),
@@ -414,6 +594,7 @@ mod tests {
             tags: vec![],
             issued_date: None,
             expire_date: None,
+            storage: None,
         };
         let document_use_cases = Arc::new(DocumentUseCases {
             document_repository: Arc::new(MockFailingDocumentRepository {}),

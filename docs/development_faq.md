@@ -118,6 +118,17 @@ JWT storage is scoped per tenant (`auth_token:<tenant-id>`) so switching tenants
 
 See `frontend/AGENTS.md` for layout conventions (`tenants/<id>/` vs shared code) and theme hooks.
 
+## Proton Drive (experimental, web only)
+
+life-manager can upload document files **directly to Proton Drive** from the **Expo web** build (desktop or mobile browser). The native Expo app still uses the backend multipart upload path without Proton.
+
+- **Connect:** Home screen → **Proton Drive (experimental)** panel. You log in to Proton in the browser; credentials stay client-side only (never sent to the life-manager backend).
+- **Upload flow:** Connect Proton → create a document with title/content → attach a file → submit. The file is encrypted and uploaded via `@protontech/drive-sdk`; metadata (Proton node IDs) is saved via `POST /life-manager/api/v1/documents/json`.
+- **OCR:** Skipped for Proton-backed uploads in v1 — enter title and content manually.
+- **Dependencies:** `@protontech/drive-sdk`, `@protontech/crypto` (see `frontend/lib/proton-drive/`).
+- **Status:** Proton’s SDK is preview-only; a breaking crypto migration is expected late 2026 / early 2027. Personal/non-commercial use only per Proton’s SDK terms.
+- **Migration:** After pulling backend changes, run `diesel migration run` for the new document storage columns.
+
 ### TLS in production
 
 HTTPS is not terminated inside the Rust server. Put Nginx, Caddy, or another reverse proxy in front if you need TLS; point the frontend’s API URL at the HTTPS origin clients use.

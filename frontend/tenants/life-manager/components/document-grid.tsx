@@ -49,6 +49,11 @@ const DOCUMENT_COLUMNS = [
     size: 110,
     cell: (info) => formatDocumentCellValue(info.row.original, 'expire_date'),
   }),
+  columnHelper.accessor('storage', {
+    header: 'File',
+    size: 160,
+    cell: (info) => formatDocumentCellValue(info.row.original, 'storage'),
+  }),
 ];
 
 export default function DocumentGrid({ documents, onRowPress }: DocumentGridProps) {

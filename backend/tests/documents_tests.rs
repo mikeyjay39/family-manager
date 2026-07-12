@@ -35,6 +35,7 @@ async fn create_and_get_document_docker_compose() {
             tags: vec![],
             issued_date: None,
             expire_date: None,
+            storage: None,
         };
 
         let json_string = serde_json::to_string(&payload).unwrap();
@@ -128,6 +129,7 @@ async fn create_and_get_document() {
             tags: vec![],
             issued_date: None,
             expire_date: None,
+            storage: None,
         };
 
         let json_string = serde_json::to_string(&payload).unwrap();
@@ -221,6 +223,7 @@ async fn create_and_get_document_no_file() {
             tags: vec![],
             issued_date: None,
             expire_date: None,
+            storage: None,
         };
         // Make REST API call to create a document
         let json_string = serde_json::to_string(&payload).unwrap();
@@ -297,6 +300,7 @@ async fn create_and_get_document_with_dates() {
             tags: vec![],
             issued_date: Some(issued_date),
             expire_date: Some(expire_date),
+            storage: None,
         };
         let json_string = serde_json::to_string(&payload).unwrap();
 
@@ -363,6 +367,7 @@ async fn create_and_get_document_with_tags() {
             tags: vec!["finance".to_string(), "Tax".to_string()],
             issued_date: None,
             expire_date: None,
+            storage: None,
         };
         let json_string = serde_json::to_string(&payload).unwrap();
 
@@ -467,6 +472,7 @@ async fn get_all_documents() {
                 tags: vec![],
                 issued_date: None,
                 expire_date: None,
+                storage: None,
             },
             CreateDocumentCommand {
                 title: String::from("Second Document"),
@@ -474,6 +480,7 @@ async fn get_all_documents() {
                 tags: vec![],
                 issued_date: None,
                 expire_date: None,
+                storage: None,
             },
             CreateDocumentCommand {
                 title: String::from("Third Document"),
@@ -481,6 +488,7 @@ async fn get_all_documents() {
                 tags: vec![],
                 issued_date: None,
                 expire_date: None,
+                storage: None,
             },
         ];
 
@@ -596,6 +604,81 @@ async fn get_all_documents() {
             documents.len() >= 2,
             "Expected at least 3 documents, got {}",
             documents.len()
+        );
+    })
+    .await;
+}
+
+const DOCUMENTS_JSON_URL: &str = "/life-manager/api/v1/documents/json";
+
+#[tokio::test]
+#[serial]
+#[traced_test]
+async fn create_and_get_document_json_with_proton_storage() {
+    use life_manager::infrastructure::document::document_api_types::DocumentStorageRefDto;
+
+    run_test_with_test_profile(|server: TestServer| async move {
+        let auth_header = build_auth_header(&server).await;
+
+        let payload = CreateDocumentCommand {
+            title: String::from("Proton-backed document"),
+            content: String::from("Manual summary text."),
+            tags: vec!["proton".to_string()],
+            issued_date: None,
+            expire_date: None,
+            storage: Some(DocumentStorageRefDto {
+                provider: "proton_drive".to_string(),
+                share_id: "share-integration".to_string(),
+                node_id: "node-integration".to_string(),
+                filename: "receipt.pdf".to_string(),
+                mime_type: Some("application/pdf".to_string()),
+            }),
+        };
+
+        let url = server
+            .server_url(DOCUMENTS_JSON_URL)
+            .expect("Failed to get server URL")
+            .to_string();
+
+        let res = reqwest::Client::new()
+            .post(&url)
+            .json(&payload)
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+
+        assert!(
+            res.status().is_success(),
+            "JSON create failed: {}",
+            res.status()
+        );
+
+        let saved: DocumentDto = res.json().await.unwrap();
+        assert_eq!(saved.title, "Proton-backed document");
+        assert_eq!(saved.tags, vec!["proton".to_string()]);
+        assert_eq!(
+            saved.storage.as_ref().map(|s| s.filename.as_str()),
+            Some("receipt.pdf")
+        );
+
+        let get_url = server
+            .server_url(&format!("{}/{}", DOCUMENTS_URL, saved.id))
+            .expect("Failed to get server URL")
+            .to_string();
+
+        let get_response = reqwest::Client::new()
+            .get(&get_url)
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send get request");
+
+        assert!(get_response.status().is_success());
+        let document: DocumentDto = get_response.json().await.unwrap();
+        assert_eq!(
+            document.storage.as_ref().map(|s| s.node_id.as_str()),
+            Some("node-integration")
         );
     })
     .await;

@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::domain::document_summarizer::DocumentSummarizer;
 use crate::domain::document_summarizer::DocumentSummaryResult;
+use crate::domain::document_storage_ref::DocumentStorageRef;
 use crate::domain::document_text_reader::DocumentTextReader;
 use crate::domain::uploaded_document_input::UploadedDocumentInput;
 
@@ -20,6 +21,7 @@ pub struct Document {
     pub created_at: chrono::NaiveDateTime,
     pub issued_date: Option<chrono::NaiveDateTime>,
     pub expire_date: Option<chrono::NaiveDateTime>,
+    pub storage: Option<DocumentStorageRef>,
 }
 
 impl Document {
@@ -34,6 +36,7 @@ impl Document {
             created_at: Utc::now().naive_utc(),
             issued_date: None,
             expire_date: None,
+            storage: None,
         }
     }
 
@@ -47,6 +50,7 @@ impl Document {
         created_at: chrono::NaiveDateTime,
         issued_date: Option<chrono::NaiveDateTime>,
         expire_date: Option<chrono::NaiveDateTime>,
+        storage: Option<DocumentStorageRef>,
     ) -> Self {
         Self {
             id,
@@ -57,7 +61,20 @@ impl Document {
             created_at,
             issued_date,
             expire_date,
+            storage,
         }
+    }
+
+    /// Creates a document with metadata and optional external storage reference.
+    pub fn new_with_storage(
+        title: &str,
+        content: &str,
+        user_id: Uuid,
+        storage: Option<DocumentStorageRef>,
+    ) -> Self {
+        let mut document = Self::new(title, content, user_id);
+        document.storage = storage;
+        document
     }
 
     /**
@@ -97,6 +114,7 @@ impl Document {
             created_at: Utc::now().naive_utc(),
             issued_date: None,
             expire_date: None,
+            storage: None,
         };
         Some(document)
     }
@@ -143,6 +161,7 @@ mod tests {
             user_id,
             vec![],
             Utc::now().naive_utc(),
+            None,
             None,
             None,
         );

@@ -33,5 +33,10 @@ export function formatDocumentCellValue(doc: DocumentDto, key: DocumentColumnKey
       return formatDocumentDate(doc.issued_date);
     case 'expire_date':
       return formatDocumentDate(doc.expire_date);
+    case 'storage':
+      if (doc.storage?.provider === 'proton_drive') {
+        return `Proton: ${doc.storage.filename}`;
+      }
+      return EMPTY_CELL;
   }
 }

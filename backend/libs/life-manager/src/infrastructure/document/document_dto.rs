@@ -5,6 +5,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::domain::document::Document;
+use crate::infrastructure::document::document_api_types::DocumentStorageRefDto;
 
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(
@@ -19,6 +20,7 @@ pub struct DocumentDto {
     pub created_at: NaiveDateTime,
     pub issued_date: Option<NaiveDateTime>,
     pub expire_date: Option<NaiveDateTime>,
+    pub storage: Option<DocumentStorageRefDto>,
 }
 
 impl DocumentDto {
@@ -31,6 +33,10 @@ impl DocumentDto {
             created_at: document.created_at,
             issued_date: document.issued_date,
             expire_date: document.expire_date,
+            storage: document
+                .storage
+                .as_ref()
+                .map(DocumentStorageRefDto::from_domain),
         }
     }
 }
@@ -54,6 +60,7 @@ mod tests {
         assert_eq!(dto.created_at, document.created_at);
         assert_eq!(dto.issued_date, document.issued_date);
         assert_eq!(dto.expire_date, document.expire_date);
+        assert!(dto.storage.is_none());
     }
 
     #[test]
