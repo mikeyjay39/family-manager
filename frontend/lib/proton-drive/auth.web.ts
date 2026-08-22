@@ -1,5 +1,6 @@
 import { getSrp } from '@protontech/crypto/srp';
 
+import { ensureProtonCryptoReady } from './crypto-setup.web';
 import { protonAccountFetch, ProtonApiError, type ProtonApiSession } from './proton-api.web';
 import type { ProtonSessionTokens } from './types';
 
@@ -38,6 +39,8 @@ export async function authenticateProton({
   totp,
 }: ConnectProtonOptions): Promise<ProtonSessionTokens> {
   const username = email.trim();
+
+  await ensureProtonCryptoReady();
 
   const info = await protonAccountFetch<AuthInfoResponse>('core/v4/auth/info', null, {
     method: 'POST',

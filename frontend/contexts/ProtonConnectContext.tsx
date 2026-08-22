@@ -37,9 +37,7 @@ export function ProtonConnectProvider({ children }: { children: ReactNode }) {
     }
     void (async () => {
       try {
-        const { loadPersistedTokens } = await import(
-          /* @metro-ignore */ '../lib/proton-drive/session-store.web'
-        );
+        const { loadPersistedTokens } = await import('@/lib/proton-drive/load-proton.web');
         const tokens = await loadPersistedTokens();
         if (tokens) {
           setSession({ email: tokens.email });
@@ -62,8 +60,8 @@ export function ProtonConnectProvider({ children }: { children: ReactNode }) {
       }
       setIsConnecting(true);
       try {
-        const proton = await import(/* @metro-ignore */ '../lib/proton-drive/index.web');
-        const active = await proton.connectProton(options);
+        const { connectProton } = await import('@/lib/proton-drive/load-proton.web');
+        const active = await connectProton(options);
         setSession({ email: active.email });
       } finally {
         setIsConnecting(false);
@@ -76,8 +74,8 @@ export function ProtonConnectProvider({ children }: { children: ReactNode }) {
     if (!isSupported) {
       return;
     }
-    const proton = await import(/* @metro-ignore */ '../lib/proton-drive/index.web');
-    await proton.disconnectProton();
+    const { disconnectProton } = await import('@/lib/proton-drive/load-proton.web');
+    await disconnectProton();
     setSession(null);
   }, [isSupported]);
 

@@ -17,12 +17,20 @@ function parseTags(input: string): string[] {
 }
 
 async function assetToFile(asset: DocumentPickerAsset): Promise<File> {
-  if (asset.file) {
+  const filename = asset.name?.trim() || 'upload';
+  if (asset.file?.name?.trim()) {
     return asset.file;
+  }
+  if (asset.file) {
+    return new File([asset.file], filename, {
+      type: asset.file.type || asset.mimeType || 'application/octet-stream',
+    });
   }
   const response = await fetch(asset.uri);
   const blob = await response.blob();
-  return new File([blob], asset.name, { type: asset.mimeType ?? 'application/octet-stream' });
+  return new File([blob], filename, {
+    type: asset.mimeType || blob.type || 'application/octet-stream',
+  });
 }
 
 export default function DocumentCreateForm() {
@@ -146,11 +154,9 @@ export default function DocumentCreateForm() {
     setLoading(true);
     try {
       if (isWeb && pickedFile && protonSession) {
-        const proton = await import(
-          /* @metro-ignore */ '../../../../lib/proton-drive/index.web'
-        );
+        const proton = await import('@/lib/proton-drive/load-proton.web');
         const file = await assetToFile(pickedFile);
-        const storage = await proton.uploadToLifeManagerFolder(file);
+        const storage = await proton.uploadToLifeManagerFolder(file, undefined, pickedFile.name);
         const payload: CreateDocumentCommand = {
           title: title.trim(),
           content: content.trim(),

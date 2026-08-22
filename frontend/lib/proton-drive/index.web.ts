@@ -55,10 +55,11 @@ export async function restoreProtonSessionFromStorage(
 
 export async function uploadToLifeManagerFolder(
   file: File,
-  onProgress?: (uploadedBytes: number) => void
+  onProgress?: (uploadedBytes: number) => void,
+  fallbackFilename?: string
 ): Promise<ProtonStorageUploadResult> {
   const { uploadFileToLifeManagerFolder } = await import('./drive-client.web');
-  return uploadFileToLifeManagerFolder(file, onProgress);
+  return uploadFileToLifeManagerFolder(file, onProgress, fallbackFilename);
 }
 
 export async function buildNodeUid(shareId: string, nodeId: string): Promise<string> {

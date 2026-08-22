@@ -6,7 +6,7 @@ export type { ProtonSessionTokens };
 
 export const PROTON_DRIVE_PROVIDER = 'proton_drive';
 
-export const LIFE_MANAGER_FOLDER_NAME = 'life-manager';
+export { LIFE_MANAGER_FOLDER_NAME } from './constants';
 
 export interface ProtonStorageUploadResult {
   provider: typeof PROTON_DRIVE_PROVIDER;

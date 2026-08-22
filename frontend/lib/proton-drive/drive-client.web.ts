@@ -119,18 +119,33 @@ export function setActiveProtonSession(session: ProtonActiveSession | null): voi
 
 export { readActiveSession as getActiveProtonSession };
 
+function resolveUploadFilename(file: File, fallbackName?: string): string {
+  const fromFile = file.name?.trim();
+  if (fromFile) {
+    return fromFile;
+  }
+  const fromPicker = fallbackName?.trim();
+  if (fromPicker) {
+    return fromPicker;
+  }
+  const extension = file.type?.split('/')[1];
+  return extension ? `upload.${extension}` : 'upload';
+}
+
 export async function uploadFileToLifeManagerFolder(
   file: File,
-  onProgress?: (uploadedBytes: number) => void
+  onProgress?: (uploadedBytes: number) => void,
+  fallbackFilename?: string
 ): Promise<ProtonStorageUploadResult> {
   const client = await getClient();
   const folderUid = await ensureLifeManagerFolder(client);
+  const filename = resolveUploadFilename(file, fallbackFilename);
   const metadata: UploadMetadata = {
     expectedSize: file.size,
     mimeType: file.type || 'application/octet-stream',
   };
 
-  const uploader = await client.getFileUploader(folderUid, file.name, metadata);
+  const uploader = await client.getFileUploader(folderUid, filename, metadata);
   const controller = await uploader.uploadFromFile(file, [], onProgress);
   const { nodeUid } = await controller.completion();
   const { shareId, nodeId } = splitNodeUid(nodeUid);
@@ -139,7 +154,7 @@ export async function uploadFileToLifeManagerFolder(
     provider: PROVIDER,
     shareId,
     nodeId,
-    filename: file.name,
+    filename,
     mimeType: file.type || null,
   };
 }

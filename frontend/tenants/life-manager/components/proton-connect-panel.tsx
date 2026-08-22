@@ -21,7 +21,9 @@ export default function ProtonConnectPanel() {
   const palette = useColorPalette();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [mailboxPassword, setMailboxPassword] = useState('');
   const [totp, setTotp] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const styles = useMemo(
     () =>
@@ -75,6 +77,10 @@ export default function ProtonConnectPanel() {
           fontSize: 14,
           color: palette.text,
         },
+        errorText: {
+          fontSize: 14,
+          color: '#c62828',
+        },
       }),
     [palette]
   );
@@ -85,33 +91,41 @@ export default function ProtonConnectPanel() {
 
   const handleConnect = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('Proton Drive', 'Enter your Proton email and password.');
+      setErrorMessage('Enter your Proton email and password.');
       return;
     }
+    setErrorMessage(null);
     try {
       await connect({
         email: email.trim(),
         password,
+        mailboxPassword: mailboxPassword.trim() || undefined,
         totp: totp.trim() || undefined,
       });
       setPassword('');
+      setMailboxPassword('');
       setTotp('');
     } catch (error) {
-      Alert.alert(
-        'Proton connection failed',
-        error instanceof Error ? error.message : 'Unknown error'
-      );
+      let message = error instanceof Error ? error.message : 'Unknown error';
+      if (/incorrect key passphrase|wrong passphrase|bad passphrase/i.test(message)) {
+        message =
+          'Could not unlock Proton encryption keys with your login password. If your account uses a separate mailbox password, enter it in the Mailbox password field.';
+      }
+      console.error('Proton connection failed:', error);
+      setErrorMessage(message);
+      Alert.alert('Proton connection failed', message);
     }
   };
 
   const handleDisconnect = async () => {
+    setErrorMessage(null);
     try {
       await disconnect();
     } catch (error) {
-      Alert.alert(
-        'Proton disconnect failed',
-        error instanceof Error ? error.message : 'Unknown error'
-      );
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Proton disconnect failed:', error);
+      setErrorMessage(message);
+      Alert.alert('Proton disconnect failed', message);
     }
   };
 
@@ -152,9 +166,21 @@ export default function ProtonConnectPanel() {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
-        placeholder="Proton password"
+        placeholder="Proton login password"
         placeholderTextColor={palette.icon}
       />
+      <Text style={styles.label}>Mailbox password (if different)</Text>
+      <TextInput
+        style={styles.input}
+        value={mailboxPassword}
+        onChangeText={setMailboxPassword}
+        secureTextEntry
+        placeholder="Leave blank if same as login password"
+        placeholderTextColor={palette.icon}
+      />
+      <Text style={styles.disclosure}>
+        Proton accounts with a second password need it here to unlock Drive keys.
+      </Text>
       <Text style={styles.label}>2FA code (if enabled)</Text>
       <TextInput
         style={styles.input}
@@ -177,6 +203,7 @@ export default function ProtonConnectPanel() {
           <Text style={styles.buttonText}>Connect Proton Drive</Text>
         )}
       </TouchableOpacity>
+      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
     </View>
   );
 }

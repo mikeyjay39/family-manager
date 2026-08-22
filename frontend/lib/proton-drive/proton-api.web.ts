@@ -17,7 +17,7 @@ export class ProtonApiError extends Error {
   }
 }
 
-function buildHeaders(session: ProtonApiSession | null, baseUrl: string): HeadersInit {
+function buildHeaders(session: ProtonApiSession | null, baseUrl: string): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.protonmail.v1+json',
     'x-pm-appversion': PROTON_APP_VERSION,
@@ -31,6 +31,23 @@ function buildHeaders(session: ProtonApiSession | null, baseUrl: string): Header
     headers['x-pm-dohproxy-required'] = '1';
   }
   return headers;
+}
+
+/** Merge auth headers with init.headers (Headers objects do not spread into plain objects). */
+function mergeFetchHeaders(base: Record<string, string>, extra?: HeadersInit): Headers {
+  const merged = new Headers(base);
+  if (extra instanceof Headers) {
+    extra.forEach((value, key) => merged.set(key, value));
+  } else if (Array.isArray(extra)) {
+    extra.forEach(([key, value]) => merged.set(key, value));
+  } else if (extra) {
+    Object.entries(extra).forEach(([key, value]) => {
+      if (value !== undefined) {
+        merged.set(key, String(value));
+      }
+    });
+  }
+  return merged;
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
@@ -51,31 +68,27 @@ export async function protonAccountFetch<T>(
   init: RequestInit = {}
 ): Promise<T> {
   const url = `${PROTON_ACCOUNT_API_BASE}/${path.replace(/^\//, '')}`;
+  const headers = mergeFetchHeaders(buildHeaders(session, PROTON_ACCOUNT_API_BASE), init.headers);
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   const response = await fetch(url, {
     ...init,
     credentials: 'include',
-    headers: {
-      ...buildHeaders(session, PROTON_ACCOUNT_API_BASE),
-      ...(init.headers ?? {}),
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-    },
+    headers,
   });
   return parseJsonResponse<T>(response);
 }
 
-export async function protonDriveFetch(
-  path: string,
+export async function protonDriveFetchUrl(
+  url: string,
   session: ProtonApiSession,
   init: RequestInit = {}
 ): Promise<Response> {
-  const url = `${PROTON_DRIVE_API_BASE}/${path.replace(/^\//, '')}`;
   return fetch(url, {
     ...init,
     credentials: 'include',
-    headers: {
-      ...buildHeaders(session, PROTON_DRIVE_API_BASE),
-      ...(init.headers ?? {}),
-    },
+    headers: mergeFetchHeaders(buildHeaders(session, PROTON_DRIVE_API_BASE), init.headers),
   });
 }
 
