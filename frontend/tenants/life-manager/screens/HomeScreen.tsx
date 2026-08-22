@@ -21,6 +21,7 @@ export default function HomeScreen() {
   const { tenant } = useTenant();
   const { copy, assets, headerBackground } = useTenantBranding();
   const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
+  const [documentsRefreshKey, setDocumentsRefreshKey] = useState(0);
 
   const performLogout = async () => {
     await logout();
@@ -58,8 +59,10 @@ export default function HomeScreen() {
         <ThemedView style={styles.stepContainer}>
           <ThemedText type="subtitle">Documents</ThemedText>
           <ProtonConnectPanel />
-          <DocumentCreateForm />
-          <DocumentList />
+          <DocumentCreateForm
+            onDocumentCreated={() => setDocumentsRefreshKey((key) => key + 1)}
+          />
+          <DocumentList refreshKey={documentsRefreshKey} />
         </ThemedView>
       </ParallaxScrollView>
       <ConfirmDialog

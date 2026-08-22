@@ -41,7 +41,11 @@ export function parseDocumentDto(item: unknown): DocumentDto {
   };
 }
 
-export default function DocumentList() {
+type DocumentListProps = {
+  refreshKey?: number;
+};
+
+export default function DocumentList({ refreshKey = 0 }: DocumentListProps) {
   const { token, handleUnauthorized } = useAuth();
   const palette = useColorPalette();
   const [documents, setDocuments] = useState<DocumentDto[]>([]);
@@ -166,7 +170,7 @@ export default function DocumentList() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   return (
     <View style={styles.container}>

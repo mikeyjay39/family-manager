@@ -33,7 +33,11 @@ async function assetToFile(asset: DocumentPickerAsset): Promise<File> {
   });
 }
 
-export default function DocumentCreateForm() {
+type DocumentCreateFormProps = {
+  onDocumentCreated?: () => void;
+};
+
+export default function DocumentCreateForm({ onDocumentCreated }: DocumentCreateFormProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tagsInput, setTagsInput] = useState('');
@@ -184,6 +188,7 @@ export default function DocumentCreateForm() {
         } catch {
           // use default message
         }
+        onDocumentCreated?.();
         Alert.alert('Success', message);
         setPickedFile(null);
         return;
@@ -239,6 +244,7 @@ export default function DocumentCreateForm() {
       } catch {
         // use default message
       }
+      onDocumentCreated?.();
       Alert.alert('Success', message);
     } catch (err: unknown) {
       console.error(err);

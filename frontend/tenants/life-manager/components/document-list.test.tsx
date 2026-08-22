@@ -21,10 +21,10 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
 const mockUseAuth = vi.mocked(useAuth);
 const mockAuthenticatedFetch = vi.mocked(authenticatedFetch);
 
-function renderDocumentList() {
+function renderDocumentList(props: { refreshKey?: number } = {}) {
   return render(
     <TenantThemeTestProvider theme={defaultResolvedTheme}>
-      <DocumentList />
+      <DocumentList {...props} />
     </TenantThemeTestProvider>
   );
 }
@@ -132,6 +132,23 @@ describe('DocumentList', () => {
     fireEvent.press(screen.getByLabelText('Open document Doc A'));
     expect(screen.getAllByText('Body text').length).toBeGreaterThanOrEqual(2);
     fireEvent.press(screen.getByText('Close'));
+  });
+
+  it('reloads when refreshKey changes', async () => {
+    const { rerender } = renderDocumentList({ refreshKey: 0 });
+    await waitFor(() => {
+      expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(
+      <TenantThemeTestProvider theme={defaultResolvedTheme}>
+        <DocumentList refreshKey={1} />
+      </TenantThemeTestProvider>
+    );
+
+    await waitFor(() => {
+      expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(2);
+    });
   });
 });
 

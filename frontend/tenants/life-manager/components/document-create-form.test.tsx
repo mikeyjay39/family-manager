@@ -36,10 +36,10 @@ vi.mock('expo-document-picker', () => ({
 const mockUseAuth = vi.mocked(useAuth);
 const mockApiFetch = vi.mocked(apiFetch);
 
-function renderDocumentCreateForm() {
+function renderDocumentCreateForm(props: { onDocumentCreated?: () => void } = {}) {
   return render(
     <TenantThemeTestProvider theme={defaultResolvedTheme}>
-      <DocumentCreateForm />
+      <DocumentCreateForm {...props} />
     </TenantThemeTestProvider>
   );
 }
@@ -125,5 +125,39 @@ describe('DocumentCreateForm', () => {
         expect.stringContaining('550e8400-e29b-41d4-a716-446655440000')
       );
     });
+  });
+
+  it('calls onDocumentCreated once when create succeeds', async () => {
+    const onDocumentCreated = vi.fn();
+    renderDocumentCreateForm({ onDocumentCreated });
+    fireEvent.changeText(screen.getByPlaceholderText('Document title'), 'Hello');
+    fireEvent.changeText(screen.getByPlaceholderText('Document content'), 'World');
+    fireEvent.press(screen.getByText('Create document'));
+    await waitFor(() => {
+      expect(onDocumentCreated).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('does not call onDocumentCreated on validation error', () => {
+    const onDocumentCreated = vi.fn();
+    const alertSpy = vi.spyOn(Alert, 'alert');
+    renderDocumentCreateForm({ onDocumentCreated });
+    fireEvent.changeText(screen.getByPlaceholderText('Document content'), 'body');
+    fireEvent.press(screen.getByText('Create document'));
+    expect(alertSpy).toHaveBeenCalledWith('Error', 'Please enter a title and content.');
+    expect(onDocumentCreated).not.toHaveBeenCalled();
+  });
+
+  it('does not call onDocumentCreated when API returns error', async () => {
+    const onDocumentCreated = vi.fn();
+    mockApiFetch.mockResolvedValue(new Response('bad', { status: 400 }));
+    renderDocumentCreateForm({ onDocumentCreated });
+    fireEvent.changeText(screen.getByPlaceholderText('Document title'), 'Hello');
+    fireEvent.changeText(screen.getByPlaceholderText('Document content'), 'World');
+    fireEvent.press(screen.getByText('Create document'));
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalled();
+    });
+    expect(onDocumentCreated).not.toHaveBeenCalled();
   });
 });
