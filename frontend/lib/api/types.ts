@@ -5,4 +5,6 @@ export type {
   GetDocumentsQueryParams,
   LoginRequest,
   LoginResponse,
+  SignupRequest,
+  SignupResponse,
 } from './generated';

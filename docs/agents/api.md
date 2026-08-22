@@ -9,8 +9,10 @@ Parent hub: [../../AGENTS.md](../../AGENTS.md). Routing diagrams: [../architectu
 | `GET /api/health` | Returns `"up"` |
 | `GET /api/version` | Build/git revision string |
 | `POST /life-manager/api/v1/auth/login` | JWT login |
+| `POST /life-manager/api/v1/auth/signup` | Create inactive user (email stored as `username`); returns pending-approval message; no JWT |
 | `GET /life-manager/api/v1/auth/protected` | Auth smoke test |
 | `POST /test-tenant/api/v1/auth/login` | JWT login (test-tenant pilot) |
+| `POST /test-tenant/api/v1/auth/signup` | Create inactive user (test-tenant pilot) |
 | `GET /test-tenant/api/v1/auth/protected` | Auth smoke test (test-tenant pilot) |
 | `POST /life-manager/api/v1/documents/` | Multipart: `json` (CreateDocumentCommand) + `file` |
 | `POST /life-manager/api/v1/documents/json` | JSON body: CreateDocumentCommand with required `storage` (Proton Drive ref); no file/OCR — see [Proton upload workflow](../development_faq.md#upload-workflow) |
@@ -34,6 +36,33 @@ Nginx proxies each tenant hostname to its mount path (see `nginx/tenants.prod.js
 
 - Protected routes: `Authorization: Bearer <token>`
 - Login rejects unknown credentials, inactive users (`active = false`), and principals whose `tenant` does not match the tenant mount (e.g. `life-manager`)
+- Signup (`POST .../auth/signup`) accepts `{ email, password }`, stores the email in `auth_users.username`, inserts with `active = false`, and returns `201` with a pending-approval message (no JWT). Duplicate email → `400 validation_error`.
+
+```mermaid
+flowchart TD
+  A[User submits /signup] --> B[POST .../auth/signup]
+  B --> C[Validate email and password]
+  C --> D[Hash password]
+  D --> E["INSERT auth_users active=false"]
+  E --> F[201 pending-approval message]
+  F --> G[Admin activates via sqlite3]
+  G --> H[Login succeeds]
+```
+
+- **Manual activation:** after signup, an admin activates the account in SQLite (agents do not run write SQL):
+
+```bash
+# Dev DB path from .dev.env
+sqlite3 ./data/dev-test.db \
+  "UPDATE auth_users SET active = 1 WHERE username = 'user@example.com';"
+```
+
+List pending signups:
+
+```sql
+SELECT username, tenant, created_at FROM auth_users WHERE active = 0;
+```
+
 - Backend auth crate: `backend/libs/auth/` builds `AuthState` via `AuthStateBuilder`; life-manager composes it into `LifeManagerState` and wires `FromRef` via `libs/life-manager/src/infrastructure/auth_integration.rs`
 - Handlers receive `AuthUser` where required
 - Frontend: `useAuth()` + `authenticatedFetch` from `frontend/lib/api/client.ts` — do not hard-code origins in components

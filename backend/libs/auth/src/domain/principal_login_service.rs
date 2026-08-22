@@ -87,6 +87,16 @@ mod tests {
                 .as_ref()
                 .map(|principal| Box::new(principal.clone()) as Box<dyn Principal>)
         }
+
+        async fn create_user(
+            &self,
+            _username: &str,
+            _password_hash: &str,
+            _tenant: &str,
+            _active: bool,
+        ) -> Result<(), crate::domain::principal::CreateUserError> {
+            Ok(())
+        }
     }
 
     struct StubHasher {

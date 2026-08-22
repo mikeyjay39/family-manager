@@ -20,7 +20,7 @@ cargo test --lib
 
 ### TypeScript DTO export (ts-rs)
 
-After changing Rust API DTOs (`LoginRequest`, `DocumentDto`, `CreateDocumentCommand`, etc.):
+After changing Rust API DTOs (`LoginRequest`, `SignupRequest`, `DocumentDto`, `CreateDocumentCommand`, etc.):
 
 ```bash
 ./backend/scripts/export_ts_bindings.sh
@@ -113,6 +113,33 @@ EXPO_PUBLIC_DEFAULT_TENANT=test-tenant EXPO_PUBLIC_API_BASE_URL=http://localhost
 ```
 
 JWT storage is scoped per tenant (`auth_token:<tenant-id>`) so switching tenants in dev does not reuse the wrong session.
+
+## User signup and manual activation
+
+New users sign up from the UI (`/signup`). The backend stores them as **inactive** (`auth_users.active = 0`); login returns 401 until you activate the account.
+
+```mermaid
+flowchart TD
+  A[User submits /signup] --> B[POST .../auth/signup]
+  B --> C[Validate email and password]
+  C --> D[Hash password]
+  D --> E["INSERT auth_users active=false"]
+  E --> F[201 pending-approval message]
+  F --> G[Admin activates via sqlite3]
+  G --> H[Login succeeds]
+```
+
+```bash
+# Pending signups (dev DB from .dev.env)
+sqlite3 ./data/dev-test.db \
+  "SELECT username, tenant, created_at FROM auth_users WHERE active = 0;"
+
+# Activate a user (use the email they signed up with — stored as username)
+sqlite3 ./data/dev-test.db \
+  "UPDATE auth_users SET active = 1 WHERE username = 'user@example.com';"
+```
+
+Agents must not run write SQL or migrations; you apply activation locally.
 
 **Tenant theme overrides:** add or edit the optional `theme` block in `tenants/<id>/meta.ts` (e.g. `light: { tint: '#336699' }`). Reload the web app or restart Expo to pick up meta changes. Combine with `?tenant=<id>` when testing multiple tenants on localhost.
 
