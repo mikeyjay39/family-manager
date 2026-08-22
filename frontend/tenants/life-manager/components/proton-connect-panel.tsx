@@ -4,14 +4,14 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
   Alert,
+  Modal,
+  ScrollView,
 } from 'react-native';
 
+import { Button } from '@/components/ui/button';
 import { useProtonConnect } from '@/contexts/ProtonConnectContext';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
-import { withAlpha } from '@/lib/tenant/theme/color-utils';
 
 const THIRD_PARTY_DISCLOSURE =
   'This is a third-party application not officially supported by Proton.';
@@ -19,6 +19,7 @@ const THIRD_PARTY_DISCLOSURE =
 export default function ProtonConnectPanel() {
   const { isSupported, session, isConnecting, connect, disconnect } = useProtonConnect();
   const palette = useColorPalette();
+  const [modalVisible, setModalVisible] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mailboxPassword, setMailboxPassword] = useState('');
@@ -28,66 +29,93 @@ export default function ProtonConnectPanel() {
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        container: {
+        connectedRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          flexWrap: 'wrap',
           gap: 8,
-          padding: 12,
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: withAlpha(palette.icon, 0.35),
-          backgroundColor: withAlpha(palette.icon, 0.08),
-        },
-        title: {
-          fontSize: 16,
-          fontWeight: '600',
-          color: palette.text,
         },
         disclosure: {
           fontSize: 13,
           color: palette.icon,
+          marginBottom: 8,
         },
         label: {
           fontSize: 14,
           color: palette.text,
+          marginBottom: 4,
         },
         input: {
           borderWidth: 1,
           borderColor: palette.icon,
           borderRadius: 8,
           padding: 10,
+          marginBottom: 8,
           color: palette.text,
           backgroundColor: palette.background,
-        },
-        button: {
-          backgroundColor: palette.tint,
-          borderRadius: 8,
-          paddingVertical: 12,
-          alignItems: 'center',
-        },
-        buttonSecondary: {
-          backgroundColor: withAlpha(palette.icon, 0.2),
-        },
-        buttonText: {
-          color: palette.onTint,
-          fontWeight: '600',
-        },
-        buttonTextSecondary: {
-          color: palette.text,
         },
         connectedText: {
           fontSize: 14,
           color: palette.text,
+          flex: 1,
+          minWidth: 120,
+        },
+        disconnectButton: {
+          paddingVertical: 10,
+          paddingHorizontal: 14,
         },
         errorText: {
           fontSize: 14,
           color: '#c62828',
+          marginBottom: 8,
+        },
+        modalBackdrop: {
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.45)',
+          justifyContent: 'center',
+          padding: 24,
+        },
+        modalCard: {
+          backgroundColor: palette.background,
+          borderRadius: 12,
+          maxHeight: '85%',
+          overflow: 'hidden',
+        },
+        modalScroll: {
+          padding: 16,
+        },
+        modalTitle: {
+          fontSize: 20,
+          fontWeight: '700',
+          marginBottom: 12,
+          color: palette.text,
+        },
+        modalActions: {
+          flexDirection: 'row',
+          gap: 12,
+          padding: 14,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: palette.icon,
+        },
+        modalActionButton: {
+          flex: 1,
+          paddingVertical: 12,
         },
       }),
     [palette]
   );
 
-  if (!isSupported) {
-    return null;
-  }
+  const clearSensitiveFields = () => {
+    setPassword('');
+    setMailboxPassword('');
+    setTotp('');
+    setErrorMessage(null);
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    clearSensitiveFields();
+  };
 
   const handleConnect = async () => {
     if (!email.trim() || !password) {
@@ -102,9 +130,7 @@ export default function ProtonConnectPanel() {
         mailboxPassword: mailboxPassword.trim() || undefined,
         totp: totp.trim() || undefined,
       });
-      setPassword('');
-      setMailboxPassword('');
-      setTotp('');
+      closeModal();
     } catch (error) {
       let message = error instanceof Error ? error.message : 'Unknown error';
       if (/incorrect key passphrase|wrong passphrase|bad passphrase/i.test(message)) {
@@ -129,81 +155,109 @@ export default function ProtonConnectPanel() {
     }
   };
 
+  if (!isSupported) {
+    return null;
+  }
+
   if (session) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Proton Drive</Text>
+      <View style={styles.connectedRow}>
         <Text style={styles.connectedText}>Connected as {session.email}</Text>
-        <TouchableOpacity
-          style={[styles.button, styles.buttonSecondary]}
+        <Button
+          variant="secondary"
+          label="Disconnect"
           onPress={() => void handleDisconnect()}
-          accessibilityRole="button"
           accessibilityLabel="Disconnect Proton Drive"
-        >
-          <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Disconnect</Text>
-        </TouchableOpacity>
+          style={styles.disconnectButton}
+        />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Proton Drive (experimental)</Text>
-      <Text style={styles.disclosure}>{THIRD_PARTY_DISCLOSURE}</Text>
-      <Text style={styles.label}>Proton email</Text>
-      <TextInput
-        style={styles.input}
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        placeholder="you@proton.me"
-        placeholderTextColor={palette.icon}
-      />
-      <Text style={styles.label}>Password</Text>
-      <TextInput
-        style={styles.input}
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        placeholder="Proton login password"
-        placeholderTextColor={palette.icon}
-      />
-      <Text style={styles.label}>Mailbox password (if different)</Text>
-      <TextInput
-        style={styles.input}
-        value={mailboxPassword}
-        onChangeText={setMailboxPassword}
-        secureTextEntry
-        placeholder="Leave blank if same as login password"
-        placeholderTextColor={palette.icon}
-      />
-      <Text style={styles.disclosure}>
-        Proton accounts with a second password need it here to unlock Drive keys.
-      </Text>
-      <Text style={styles.label}>2FA code (if enabled)</Text>
-      <TextInput
-        style={styles.input}
-        value={totp}
-        onChangeText={setTotp}
-        keyboardType="number-pad"
-        placeholder="Optional TOTP"
-        placeholderTextColor={palette.icon}
-      />
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => void handleConnect()}
+    <View>
+      <Button
+        label="Connect Proton Drive"
+        onPress={() => setModalVisible(true)}
         disabled={isConnecting}
-        accessibilityRole="button"
         accessibilityLabel="Connect Proton Drive"
+      />
+
+      <Modal
+        visible={modalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={closeModal}
       >
-        {isConnecting ? (
-          <ActivityIndicator color={palette.onTint} />
-        ) : (
-          <Text style={styles.buttonText}>Connect Proton Drive</Text>
-        )}
-      </TouchableOpacity>
-      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
+              <Text style={styles.modalTitle}>Proton Drive (experimental)</Text>
+              <Text style={styles.disclosure}>{THIRD_PARTY_DISCLOSURE}</Text>
+              <Text style={styles.label}>Proton email</Text>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                placeholder="you@proton.me"
+                placeholderTextColor={palette.icon}
+              />
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="Proton login password"
+                placeholderTextColor={palette.icon}
+              />
+              <Text style={styles.label}>Mailbox password (if different)</Text>
+              <TextInput
+                style={styles.input}
+                value={mailboxPassword}
+                onChangeText={setMailboxPassword}
+                secureTextEntry
+                placeholder="Leave blank if same as login password"
+                placeholderTextColor={palette.icon}
+              />
+              <Text style={styles.disclosure}>
+                Proton accounts with a second password need it here to unlock Drive keys.
+              </Text>
+              <Text style={styles.label}>2FA code (if enabled)</Text>
+              <TextInput
+                style={styles.input}
+                value={totp}
+                onChangeText={setTotp}
+                keyboardType="number-pad"
+                placeholder="Optional TOTP"
+                placeholderTextColor={palette.icon}
+              />
+              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Button
+                label={isConnecting ? 'Logging in…' : 'Login'}
+                onPress={() => void handleConnect()}
+                disabled={isConnecting}
+                loading={isConnecting}
+                accessibilityLabel="Login to Proton Drive"
+                style={styles.modalActionButton}
+              />
+              <Button
+                variant="outline"
+                label="Cancel"
+                onPress={closeModal}
+                disabled={isConnecting}
+                accessibilityLabel="Cancel Proton Drive login"
+                style={styles.modalActionButton}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -11,6 +11,6 @@ export const lifeManagerThemeAssets: TenantThemeAssets =
   process.env.VITEST === 'true'
     ? testAssets
     : {
-        logo: require('@/assets/images/icon.png'),
-        headerImage: require('@/assets/images/partial-react-logo.png'),
+        logo: require('./assets/logo.jpeg'),
+        headerImage: require('./assets/header-banner.jpeg'),
       };

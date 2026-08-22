@@ -1,4 +1,4 @@
-import { withAlpha } from '@/lib/tenant/theme/color-utils';
+import { mixTowardBlack, withAlpha } from '@/lib/tenant/theme/color-utils';
 
 describe('withAlpha', () => {
   it('adds alpha to a 6-digit hex color', () => {
@@ -20,5 +20,32 @@ describe('withAlpha', () => {
 
   it('returns the input unchanged for invalid hex', () => {
     expect(withAlpha('not-a-color', 0.5)).toBe('not-a-color');
+  });
+});
+
+describe('mixTowardBlack', () => {
+  it('returns the color unchanged when amount is 0', () => {
+    expect(mixTowardBlack('#0a7ea4', 0)).toBe('#0a7ea4');
+  });
+
+  it('returns black when amount is 1', () => {
+    expect(mixTowardBlack('#0a7ea4', 1)).toBe('#000000');
+  });
+
+  it('darkens a 6-digit hex by the given amount', () => {
+    expect(mixTowardBlack('#ff0000', 0.5)).toBe('#800000');
+  });
+
+  it('preserves alpha on 8-digit hex', () => {
+    expect(mixTowardBlack('#ff000080', 0.5)).toBe('#80000080');
+  });
+
+  it('clamps amount to 0–1 range', () => {
+    expect(mixTowardBlack('#ffffff', -1)).toBe('#ffffff');
+    expect(mixTowardBlack('#ffffff', 2)).toBe('#000000');
+  });
+
+  it('returns the input unchanged for invalid hex', () => {
+    expect(mixTowardBlack('not-a-color', 0.5)).toBe('not-a-color');
   });
 });

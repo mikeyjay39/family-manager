@@ -7,6 +7,7 @@ import Animated, {
   useScrollOffset,
 } from 'react-native-reanimated';
 
+import AppMenuBar from '@/components/app-menu-bar';
 import { ThemedView } from '@/components/themed-view';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -48,7 +49,8 @@ export default function ParallaxScrollView({
     <Animated.ScrollView
       ref={scrollRef}
       style={{ backgroundColor, flex: 1 }}
-      scrollEventThrottle={16}>
+      scrollEventThrottle={16}
+      stickyHeaderIndices={[1]}>
       <Animated.View
         style={[
           styles.header,
@@ -57,6 +59,7 @@ export default function ParallaxScrollView({
         ]}>
         {headerImage}
       </Animated.View>
+      <AppMenuBar />
       <ThemedView style={styles.content}>{children}</ThemedView>
     </Animated.ScrollView>
   );

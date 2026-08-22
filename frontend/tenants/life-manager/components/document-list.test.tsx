@@ -18,13 +18,17 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
   };
 });
 
+vi.mock('@/components/ui/icon-symbol', () => ({
+  IconSymbol: () => null,
+}));
+
 const mockUseAuth = vi.mocked(useAuth);
 const mockAuthenticatedFetch = vi.mocked(authenticatedFetch);
 
-function renderDocumentList() {
+function renderDocumentList(props: { refreshKey?: number } = {}) {
   return render(
     <TenantThemeTestProvider theme={defaultResolvedTheme}>
-      <DocumentList />
+      <DocumentList {...props} />
     </TenantThemeTestProvider>
   );
 }
@@ -113,12 +117,33 @@ describe('DocumentList', () => {
     });
   });
 
-  it('shows empty state when array is empty', async () => {
+  it('wraps toolbar and grid in a shared horizontal scroll when documents exist', async () => {
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { id: '1', title: 'Alpha', content: 'c1', created_at: '2026-07-11T00:00:00' },
+        ]),
+        { status: 200 }
+      )
+    );
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByTestId('documents-table-scroll')).toBeTruthy();
+    });
+    expect(screen.getByTestId('documents-table-block')).toBeTruthy();
+    expect(screen.getByText('Your documents')).toBeTruthy();
+    expect(screen.getByLabelText('Refresh documents')).toBeTruthy();
+  });
+
+  it('shows toolbar outside the table scroll when there are no documents', async () => {
     mockAuthenticatedFetch.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
     renderDocumentList();
     await waitFor(() => {
       expect(screen.getByText('No documents yet.')).toBeTruthy();
     });
+    expect(screen.queryByTestId('documents-table-scroll')).toBeNull();
+    expect(screen.getByText('Your documents')).toBeTruthy();
+    expect(screen.getByLabelText('Refresh documents')).toBeTruthy();
   });
 
   it('opens modal with title and content when a row is pressed', async () => {
@@ -132,6 +157,23 @@ describe('DocumentList', () => {
     fireEvent.press(screen.getByLabelText('Open document Doc A'));
     expect(screen.getAllByText('Body text').length).toBeGreaterThanOrEqual(2);
     fireEvent.press(screen.getByText('Close'));
+  });
+
+  it('reloads when refreshKey changes', async () => {
+    const { rerender } = renderDocumentList({ refreshKey: 0 });
+    await waitFor(() => {
+      expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(
+      <TenantThemeTestProvider theme={defaultResolvedTheme}>
+        <DocumentList refreshKey={1} />
+      </TenantThemeTestProvider>
+    );
+
+    await waitFor(() => {
+      expect(mockAuthenticatedFetch).toHaveBeenCalledTimes(2);
+    });
   });
 });
 

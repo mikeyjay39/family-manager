@@ -3,17 +3,17 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Modal,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { authenticatedFetch } from '@/lib/api/client';
 import type { DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
-import { withAlpha } from '@/lib/tenant/theme/color-utils';
-import DocumentGrid from './document-grid';
+import DocumentGrid, { DOCUMENT_GRID_WIDTH } from './document-grid';
 
 export function parseDocumentDto(item: unknown): DocumentDto {
   const d = item as Record<string, unknown>;
@@ -42,7 +42,11 @@ export function parseDocumentDto(item: unknown): DocumentDto {
   };
 }
 
-export default function DocumentList() {
+type DocumentListProps = {
+  refreshKey?: number;
+};
+
+export default function DocumentList({ refreshKey = 0 }: DocumentListProps) {
   const { token, handleUnauthorized } = useAuth();
   const palette = useColorPalette();
   const [documents, setDocuments] = useState<DocumentDto[]>([]);
@@ -57,28 +61,50 @@ export default function DocumentList() {
           gap: 8,
           marginTop: 16,
         },
+        tableScroll: {
+          width: '100%',
+        },
+        tableScrollContent: {
+          flexGrow: 1,
+          justifyContent: 'center',
+        },
+        tableBlock: {
+          width: DOCUMENT_GRID_WIDTH,
+          gap: 8,
+        },
         toolbarRow: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 8,
+          zIndex: 1,
         },
         sectionTitle: {
           fontSize: 18,
           fontWeight: '600',
-          flex: 1,
           color: palette.text,
+          flexShrink: 1,
+          ...(Platform.OS === 'web'
+            ? ({
+                position: 'sticky',
+                left: 0,
+                backgroundColor: palette.background,
+              } as const)
+            : {}),
         },
         refreshButton: {
-          backgroundColor: withAlpha(palette.icon, 0.2),
-          borderRadius: 8,
           paddingVertical: 8,
           paddingHorizontal: 12,
+          ...(Platform.OS === 'web'
+            ? ({
+                position: 'sticky',
+                right: 0,
+                backgroundColor: palette.background,
+              } as const)
+            : {}),
         },
         refreshButtonText: {
           fontSize: 14,
-          fontWeight: '600',
-          color: palette.text,
         },
         hint: {
           fontSize: 14,
@@ -120,15 +146,13 @@ export default function DocumentList() {
           marginBottom: 12,
         },
         modalClose: {
+          borderRadius: 0,
+          borderWidth: 0,
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: palette.icon,
           padding: 14,
-          alignItems: 'center',
-          backgroundColor: palette.background,
         },
         modalCloseText: {
-          fontSize: 16,
-          fontWeight: '600',
           color: palette.tint,
         },
       }),
@@ -173,33 +197,54 @@ export default function DocumentList() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
+
+  const toolbar = (
+    <View style={styles.toolbarRow}>
+      <Text style={styles.sectionTitle}>Your documents</Text>
+      <Button
+        variant="secondary"
+        label={loading ? 'Loading…' : 'Refresh'}
+        onPress={() => void load()}
+        disabled={loading || !token}
+        accessibilityLabel={loading ? 'Loading documents' : 'Refresh documents'}
+        style={styles.refreshButton}
+        labelStyle={styles.refreshButtonText}
+      />
+    </View>
+  );
+
+  const hasTable = token && !error && documents.length > 0;
 
   return (
     <View style={styles.container}>
-      <View style={styles.toolbarRow}>
-        <Text style={styles.sectionTitle}>Your documents</Text>
-        <TouchableOpacity
-          style={styles.refreshButton}
-          onPress={() => void load()}
-          disabled={loading || !token}
-          accessibilityRole="button"
-          accessibilityLabel={loading ? 'Loading documents' : 'Refresh documents'}
+      {hasTable ? (
+        <ScrollView
+          horizontal
+          style={styles.tableScroll}
+          contentContainerStyle={styles.tableScrollContent}
+          showsHorizontalScrollIndicator
+          testID="documents-table-scroll"
         >
-          <Text style={styles.refreshButtonText}>{loading ? 'Loading…' : 'Refresh'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {!token ? (
-        <Text style={styles.hint}>Sign in to see your documents.</Text>
-      ) : loading && documents.length === 0 ? (
-        <ActivityIndicator size="small" color={palette.tint} />
-      ) : error ? (
-        <Text style={styles.errorText}>{error}</Text>
-      ) : documents.length === 0 ? (
-        <Text style={styles.hint}>No documents yet.</Text>
+          <View style={styles.tableBlock} testID="documents-table-block">
+            {toolbar}
+            <DocumentGrid documents={documents} onRowPress={setSelected} />
+          </View>
+        </ScrollView>
       ) : (
-        <DocumentGrid documents={documents} onRowPress={setSelected} />
+        <>
+          {toolbar}
+
+          {!token ? (
+            <Text style={styles.hint}>Sign in to see your documents.</Text>
+          ) : loading && documents.length === 0 ? (
+            <ActivityIndicator size="small" color={palette.tint} />
+          ) : error ? (
+            <Text style={styles.errorText}>{error}</Text>
+          ) : (
+            <Text style={styles.hint}>No documents yet.</Text>
+          )}
+        </>
       )}
 
       <Modal
@@ -219,14 +264,14 @@ export default function DocumentList() {
               ) : null}
               <Text style={styles.modalContent}>{selected?.content ?? ''}</Text>
             </ScrollView>
-            <TouchableOpacity
-              style={styles.modalClose}
+            <Button
+              variant="outline"
+              label="Close"
               onPress={() => setSelected(null)}
-              accessibilityRole="button"
               accessibilityLabel="Close document"
-            >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </TouchableOpacity>
+              style={styles.modalClose}
+              labelStyle={styles.modalCloseText}
+            />
           </View>
         </View>
       </Modal>

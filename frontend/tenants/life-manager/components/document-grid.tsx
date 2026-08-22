@@ -1,78 +1,126 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
   useReactTable,
+  type SortingFn,
+  type SortingState,
 } from '@tanstack/react-table';
 import type { DocumentDto } from '@/lib/api/types';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
 import { withAlpha } from '@/lib/tenant/theme/color-utils';
-import { formatDocumentCellValue } from './document-grid-utils';
+import { createDocumentSortingFns, formatDocumentCellValue } from './document-grid-utils';
 
 export type DocumentGridProps = {
   documents: DocumentDto[];
   onRowPress: (doc: DocumentDto) => void;
 };
 
+const DOCUMENT_GRID_COLUMN_SIZES = {
+  title: 160,
+  content: 240,
+  tags: 180,
+  created_at: 110,
+  issued_date: 110,
+  expire_date: 110,
+  storage: 160,
+} as const;
+
+export const DOCUMENT_GRID_WIDTH = Object.values(DOCUMENT_GRID_COLUMN_SIZES).reduce(
+  (sum, width) => sum + width,
+  0
+);
+
 const columnHelper = createColumnHelper<DocumentDto>();
 
-const DOCUMENT_COLUMNS = [
-  columnHelper.accessor('title', {
-    header: 'Title',
-    size: 160,
-    cell: (info) => formatDocumentCellValue(info.row.original, 'title'),
-  }),
-  columnHelper.accessor('content', {
-    header: 'Content',
-    size: 240,
-    cell: (info) => formatDocumentCellValue(info.row.original, 'content'),
-  }),
-  columnHelper.accessor('tags', {
-    header: 'Tags',
-    size: 180,
-    cell: (info) => formatDocumentCellValue(info.row.original, 'tags'),
-  }),
-  columnHelper.accessor('created_at', {
-    header: 'Created',
-    size: 110,
-    cell: (info) => formatDocumentCellValue(info.row.original, 'created_at'),
-  }),
-  columnHelper.accessor('issued_date', {
-    header: 'Issued',
-    size: 110,
-    cell: (info) => formatDocumentCellValue(info.row.original, 'issued_date'),
-  }),
-  columnHelper.accessor('expire_date', {
-    header: 'Expires',
-    size: 110,
-    cell: (info) => formatDocumentCellValue(info.row.original, 'expire_date'),
-  }),
-  columnHelper.accessor('storage', {
-    header: 'File',
-    size: 160,
-    cell: (info) => formatDocumentCellValue(info.row.original, 'storage'),
-  }),
-];
+function buildColumns(sortingFns: Record<string, SortingFn<DocumentDto>>) {
+  return [
+    columnHelper.accessor('title', {
+      header: 'Title',
+      size: DOCUMENT_GRID_COLUMN_SIZES.title,
+      sortingFn: sortingFns.title,
+      cell: (info) => formatDocumentCellValue(info.row.original, 'title'),
+    }),
+    columnHelper.accessor('content', {
+      header: 'Content',
+      size: DOCUMENT_GRID_COLUMN_SIZES.content,
+      sortingFn: sortingFns.content,
+      cell: (info) => formatDocumentCellValue(info.row.original, 'content'),
+    }),
+    columnHelper.accessor('tags', {
+      header: 'Tags',
+      size: DOCUMENT_GRID_COLUMN_SIZES.tags,
+      sortingFn: sortingFns.tags,
+      cell: (info) => formatDocumentCellValue(info.row.original, 'tags'),
+    }),
+    columnHelper.accessor('created_at', {
+      header: 'Created',
+      size: DOCUMENT_GRID_COLUMN_SIZES.created_at,
+      sortingFn: sortingFns.created_at,
+      cell: (info) => formatDocumentCellValue(info.row.original, 'created_at'),
+    }),
+    columnHelper.accessor('issued_date', {
+      header: 'Issued',
+      size: DOCUMENT_GRID_COLUMN_SIZES.issued_date,
+      sortingFn: sortingFns.issued_date,
+      cell: (info) => formatDocumentCellValue(info.row.original, 'issued_date'),
+    }),
+    columnHelper.accessor('expire_date', {
+      header: 'Expires',
+      size: DOCUMENT_GRID_COLUMN_SIZES.expire_date,
+      sortingFn: sortingFns.expire_date,
+      cell: (info) => formatDocumentCellValue(info.row.original, 'expire_date'),
+    }),
+    columnHelper.accessor('storage', {
+      header: 'File',
+      size: DOCUMENT_GRID_COLUMN_SIZES.storage,
+      sortingFn: sortingFns.storage,
+      cell: (info) => formatDocumentCellValue(info.row.original, 'storage'),
+    }),
+  ];
+}
+
+function sortAccessibilityLabel(headerLabel: string, sortDirection: false | 'asc' | 'desc'): string {
+  if (sortDirection === 'asc') {
+    return `Sort by ${headerLabel}, ascending`;
+  }
+  if (sortDirection === 'desc') {
+    return `Sort by ${headerLabel}, descending`;
+  }
+  return `Sort by ${headerLabel}`;
+}
 
 export default function DocumentGrid({ documents, onRowPress }: DocumentGridProps) {
   const palette = useColorPalette();
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const sortingRef = useRef(sorting);
+  sortingRef.current = sorting;
 
-  const columns = useMemo(() => DOCUMENT_COLUMNS, []);
+  const sortingFns = useMemo(
+    () => createDocumentSortingFns(() => sortingRef.current),
+    []
+  );
+
+  const columns = useMemo(() => buildColumns(sortingFns), [sortingFns]);
 
   const table = useReactTable({
     data: documents,
     columns,
+    state: { sorting },
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    enableSortingRemoval: false,
+    sortDescFirst: false,
   });
 
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        gridScroll: {
-          marginTop: 4,
-        },
         grid: {
           borderWidth: 1,
           borderColor: palette.icon,
@@ -98,10 +146,19 @@ export default function DocumentGrid({ documents, onRowPress }: DocumentGridProp
           borderRightColor: palette.icon,
           flexShrink: 0,
         },
+        headerCellContent: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+        },
         headerCellText: {
           fontSize: 13,
           fontWeight: '700',
           color: palette.text,
+          flexShrink: 1,
+        },
+        sortIcon: {
+          flexShrink: 0,
         },
         cell: {
           paddingVertical: 10,
@@ -119,25 +176,53 @@ export default function DocumentGrid({ documents, onRowPress }: DocumentGridProp
   );
 
   return (
-    <ScrollView horizontal style={styles.gridScroll} showsHorizontalScrollIndicator>
-      <View style={styles.grid}>
-        {table.getHeaderGroups().map((headerGroup) => (
+    <View style={styles.grid}>
+      {table.getHeaderGroups().map((headerGroup) => (
           <View key={headerGroup.id} style={styles.headerRow}>
-            {headerGroup.headers.map((header) => (
-              <View
-                key={header.id}
-                style={[styles.headerCell, { width: header.getSize() }]}
-              >
-                <Text style={styles.headerCellText}>
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.header, header.getContext())}
-                </Text>
-              </View>
-            ))}
+            {headerGroup.headers.map((header) => {
+              const headerLabel =
+                typeof header.column.columnDef.header === 'string'
+                  ? header.column.columnDef.header
+                  : header.column.id;
+              const sortDirection = header.column.getIsSorted();
+
+              return (
+                <Pressable
+                  key={header.id}
+                  style={[styles.headerCell, { width: header.getSize() }]}
+                  onPress={() => header.column.toggleSorting()}
+                  accessibilityRole="button"
+                  accessibilityLabel={sortAccessibilityLabel(headerLabel, sortDirection)}
+                >
+                  <View style={styles.headerCellContent}>
+                    <Text style={styles.headerCellText}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </Text>
+                    {sortDirection === 'asc' ? (
+                      <IconSymbol
+                        name="arrow.up"
+                        size={14}
+                        color={palette.tint}
+                        style={styles.sortIcon}
+                      />
+                    ) : null}
+                    {sortDirection === 'desc' ? (
+                      <IconSymbol
+                        name="arrow.down"
+                        size={14}
+                        color={palette.tint}
+                        style={styles.sortIcon}
+                      />
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
-        ))}
-        {table.getRowModel().rows.map((row, rowIndex) => (
+      ))}
+      {table.getSortedRowModel().rows.map((row, rowIndex) => (
           <TouchableOpacity
             key={row.id}
             style={[styles.dataRow, rowIndex % 2 === 1 && styles.dataRowAlt]}
@@ -158,6 +243,5 @@ export default function DocumentGrid({ documents, onRowPress }: DocumentGridProp
           </TouchableOpacity>
         ))}
       </View>
-    </ScrollView>
   );
 }

@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
-import {
-  View,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, TextInput, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
 
 const ERROR_COLOR = '#c00';
@@ -153,28 +148,15 @@ export function LoginForm({ onSubmit, loading: externalLoading = false }: LoginF
         </ThemedText>
       ) : null}
 
-      <TouchableOpacity
-        style={[
-          styles.button,
-          {
-            backgroundColor: palette.tint,
-            opacity: isBusy ? 0.6 : 1,
-          },
-        ]}
+      <Button
+        label="Sign In"
         onPress={() => void handleLogin()}
         disabled={isBusy}
-        accessibilityRole="button"
+        loading={isBusy}
         accessibilityLabel="Sign in button"
         accessibilityHint="Tap to sign in with your credentials"
-      >
-        {isBusy ? (
-          <ActivityIndicator color={palette.onTint} />
-        ) : (
-          <ThemedText style={[styles.buttonText, { color: palette.onTint }]}>
-            Sign In
-          </ThemedText>
-        )}
-      </TouchableOpacity>
+        style={styles.button}
+      />
     </View>
   );
 }
@@ -212,13 +194,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   button: {
-    borderRadius: 8,
     padding: 16,
-    alignItems: 'center',
     marginTop: 8,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
