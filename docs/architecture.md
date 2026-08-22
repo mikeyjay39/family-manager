@@ -119,6 +119,8 @@ flowchart LR
 
 The v1 API prefix is resolved at runtime from the active tenant module (`frontend/lib/tenant/` → `configureApiClient`). Ops endpoints stay at **`/api/*`** so health checks do not move when product APIs are namespaced.
 
+**Proton document upload (web):** file bytes go to Proton Drive from the browser; the backend stores metadata only via `POST /documents/json`. Sequence and trust-boundary diagrams: [development_faq.md — Proton upload workflow](development_faq.md#upload-workflow).
+
 ## Production deployment
 
 Compose **prod** profile runs three main app services, an **`alloy`** log shipper, and an optional OCR sidecar.
