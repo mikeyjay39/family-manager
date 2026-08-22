@@ -4,3 +4,6 @@ pub mod login_request;
 pub mod login_service;
 pub mod principal;
 pub mod principal_login_service;
+pub mod principal_signup_service;
+pub mod signup_request;
+pub mod signup_service;

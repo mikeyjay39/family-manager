@@ -11,7 +11,7 @@ Update this file and the hub when frontend conventions change.
 | `app/` | Expo Router shell (`(tabs)/`, `login.tsx`, `_layout.tsx`) — routes are shared across tenants |
 | `components/` | Shared UI; co-locate `*.test.tsx` |
 | `components/ui/` | Shared primitives (`confirm-dialog.tsx` for themed confirmations) |
-| `components/auth/` | Shared auth UI (`login-form.tsx`) |
+| `components/auth/` | Shared auth UI (`login-form.tsx`, `signup-form.tsx`) |
 | `contexts/` | `AuthContext` (tenant-scoped token + login), `ProtonConnectContext` (web Proton Drive session) |
 | `lib/tenant/` | Tenant registry, resolution, `TenantProvider`, `useTenant()` |
 | `lib/proton-drive/` | Web-only Proton Drive SDK integration (`index.web.ts`); native stub in `index.ts` |
@@ -91,7 +91,7 @@ Multi-step UI flows (auth → fetch → render, wizards, tenant resolution, etc.
 |------|--------|
 | Tenant config | `tenants/life-manager/meta.ts` (hostnames, API prefix, optional `theme`) |
 | Tenant theme merge | `lib/tenant/theme/merge-theme.ts`, `TenantThemeContext.tsx` |
-| Shared login | `components/auth/login-form.tsx`, `app/login.tsx` |
+| Shared login / signup | `components/auth/login-form.tsx`, `components/auth/signup-form.tsx`, `app/login.tsx`, `app/signup.tsx` |
 | Tenant home screen | `tenants/life-manager/screens/HomeScreen.tsx` |
 | List + tests | `tenants/life-manager/components/document-list.tsx`, `document-list.test.tsx` |
 | Form + tests | `tenants/life-manager/components/document-create-form.tsx`, `document-create-form.test.tsx` |

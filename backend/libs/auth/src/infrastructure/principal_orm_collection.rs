@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use chrono::Utc;
 use deadpool_diesel::sqlite::Pool;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use uuid::Uuid;
 
 use crate::{
-    domain::principal::{Principal, PrincipalRepository},
-    infrastructure::auth_user_entity::AuthUserEntity,
+    domain::principal::{CreateUserError, Principal, PrincipalRepository},
+    infrastructure::auth_user_entity::{AuthUserEntity, NewAuthUserEntity},
     schema::auth_users,
 };
 
@@ -56,6 +58,52 @@ impl PrincipalRepository for PrincipalOrmCollection {
                 None
             }
         };
+    }
+
+    async fn create_user(
+        &self,
+        username: &str,
+        password_hash: &str,
+        tenant: &str,
+        active: bool,
+    ) -> Result<(), CreateUserError> {
+        let new_user = NewAuthUserEntity {
+            id: Uuid::new_v4().to_string(),
+            username: username.to_string(),
+            password_hash: password_hash.to_string(),
+            tenant: tenant.to_string(),
+            active,
+            created_at: Utc::now().naive_utc(),
+        };
+
+        let conn = self.pool.get().await.map_err(|e| {
+            tracing::error!("Failed to get database connection from pool: {}", e);
+            CreateUserError::Database
+        })?;
+
+        let result = conn
+            .interact(move |conn| {
+                diesel::insert_into(auth_users::table)
+                    .values(&new_user)
+                    .execute(conn)
+            })
+            .await
+            .map_err(|e| {
+                tracing::error!("Database interact error: {}", e);
+                CreateUserError::Database
+            })?;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::UniqueViolation,
+                _,
+            )) => Err(CreateUserError::DuplicateUsername),
+            Err(e) => {
+                tracing::error!("Failed to insert auth user: {}", e);
+                Err(CreateUserError::Database)
+            }
+        }
     }
 }
 
@@ -149,5 +197,59 @@ mod tests {
 
         // Then
         assert!(principal.is_none());
+    }
+
+    #[tokio::test]
+    async fn given_new_user_when_creating_user_then_inserts_inactive_row() {
+        init_test_env();
+        // Given
+        let pool = fresh_test_pool();
+        run_migrations(pool.as_ref()).await;
+        let repository = PrincipalOrmCollection::new(pool.clone());
+
+        // When
+        repository
+            .create_user(
+                "signup@example.com",
+                "hashed-password",
+                "life-manager",
+                false,
+            )
+            .await
+            .expect("create_user should succeed");
+
+        // Then
+        let principal = repository.get_principal("signup@example.com").await;
+        assert!(principal.is_none());
+
+        set_user_active(&pool, "signup@example.com", true).await;
+        let principal = repository
+            .get_principal("signup@example.com")
+            .await
+            .expect("activated user should exist");
+        assert_eq!(principal.tenant(), "life-manager");
+    }
+
+    #[tokio::test]
+    async fn given_duplicate_username_when_creating_user_then_returns_duplicate_error() {
+        init_test_env();
+        // Given
+        let pool = fresh_test_pool();
+        run_migrations(pool.as_ref()).await;
+        insert_auth_user(&pool, "dup@example.com", "password", "life-manager", false).await;
+        let repository = PrincipalOrmCollection::new(pool);
+
+        // When
+        let result = repository
+            .create_user(
+                "dup@example.com",
+                "other-hash",
+                "life-manager",
+                false,
+            )
+            .await;
+
+        // Then
+        assert_eq!(result, Err(crate::domain::principal::CreateUserError::DuplicateUsername));
     }
 }
