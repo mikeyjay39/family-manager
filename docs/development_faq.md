@@ -118,6 +118,17 @@ JWT storage is scoped per tenant (`auth_token:<tenant-id>`) so switching tenants
 
 New users sign up from the UI (`/signup`). The backend stores them as **inactive** (`auth_users.active = 0`); login returns 401 until you activate the account.
 
+```mermaid
+flowchart TD
+  A[User submits /signup] --> B[POST .../auth/signup]
+  B --> C[Validate email and password]
+  C --> D[Hash password]
+  D --> E["INSERT auth_users active=false"]
+  E --> F[201 pending-approval message]
+  F --> G[Admin activates via sqlite3]
+  G --> H[Login succeeds]
+```
+
 ```bash
 # Pending signups (dev DB from .dev.env)
 sqlite3 ./data/dev-test.db \

@@ -37,6 +37,18 @@ Nginx proxies each tenant hostname to its mount path (see `nginx/tenants.prod.js
 - Protected routes: `Authorization: Bearer <token>`
 - Login rejects unknown credentials, inactive users (`active = false`), and principals whose `tenant` does not match the tenant mount (e.g. `life-manager`)
 - Signup (`POST .../auth/signup`) accepts `{ email, password }`, stores the email in `auth_users.username`, inserts with `active = false`, and returns `201` with a pending-approval message (no JWT). Duplicate email → `400 validation_error`.
+
+```mermaid
+flowchart TD
+  A[User submits /signup] --> B[POST .../auth/signup]
+  B --> C[Validate email and password]
+  C --> D[Hash password]
+  D --> E["INSERT auth_users active=false"]
+  E --> F[201 pending-approval message]
+  F --> G[Admin activates via sqlite3]
+  G --> H[Login succeeds]
+```
+
 - **Manual activation:** after signup, an admin activates the account in SQLite (agents do not run write SQL):
 
 ```bash
