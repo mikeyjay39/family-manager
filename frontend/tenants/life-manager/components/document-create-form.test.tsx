@@ -56,6 +56,24 @@ function defaultAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
   };
 }
 
+function getSubmittedPayloadJson(): Record<string, unknown> {
+  const call = mockApiFetch.mock.calls[0];
+  const body = call[1]?.body;
+  if (!(body instanceof FormData)) {
+    throw new Error('Expected FormData body');
+  }
+  const jsonPart = body.get('json');
+  if (typeof jsonPart !== 'string') {
+    throw new Error('Expected json string in FormData');
+  }
+  return JSON.parse(jsonPart) as Record<string, unknown>;
+}
+
+function fillRequiredFields() {
+  fireEvent.changeText(screen.getByPlaceholderText('Document title'), 'Hello');
+  fireEvent.changeText(screen.getByPlaceholderText('Document content'), 'World');
+}
+
 describe('DocumentCreateForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -152,12 +170,60 @@ describe('DocumentCreateForm', () => {
     const onDocumentCreated = vi.fn();
     mockApiFetch.mockResolvedValue(new Response('bad', { status: 400 }));
     renderDocumentCreateForm({ onDocumentCreated });
-    fireEvent.changeText(screen.getByPlaceholderText('Document title'), 'Hello');
-    fireEvent.changeText(screen.getByPlaceholderText('Document content'), 'World');
+    fillRequiredFields();
     fireEvent.press(screen.getByText('Create document'));
     await waitFor(() => {
       expect(mockApiFetch).toHaveBeenCalled();
     });
     expect(onDocumentCreated).not.toHaveBeenCalled();
+  });
+
+  it('submits null dates when issue and expire fields are empty', async () => {
+    renderDocumentCreateForm();
+    fillRequiredFields();
+    fireEvent.press(screen.getByText('Create document'));
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalled();
+    });
+    const payload = getSubmittedPayloadJson();
+    expect(payload.issued_date).toBeNull();
+    expect(payload.expire_date).toBeNull();
+  });
+
+  it('submits parsed issue and expire dates in API format', async () => {
+    renderDocumentCreateForm();
+    fillRequiredFields();
+    const dateInputs = screen.getAllByPlaceholderText('YYYY-MM-DD');
+    fireEvent.changeText(dateInputs[0], '2024-06-01');
+    fireEvent.changeText(dateInputs[1], '2026-12-31');
+    fireEvent.press(screen.getByText('Create document'));
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalled();
+    });
+    const payload = getSubmittedPayloadJson();
+    expect(payload.issued_date).toBe('2024-06-01T00:00:00');
+    expect(payload.expire_date).toBe('2026-12-31T00:00:00');
+  });
+
+  it('shows validation alert for invalid issue date and does not submit', () => {
+    const alertSpy = vi.spyOn(Alert, 'alert');
+    renderDocumentCreateForm();
+    fillRequiredFields();
+    const dateInputs = screen.getAllByPlaceholderText('YYYY-MM-DD');
+    fireEvent.changeText(dateInputs[0], 'not-a-date');
+    fireEvent.press(screen.getByText('Create document'));
+    expect(alertSpy).toHaveBeenCalledWith('Error', 'Issue date must be in YYYY-MM-DD format.');
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('shows validation alert for invalid expire date and does not submit', () => {
+    const alertSpy = vi.spyOn(Alert, 'alert');
+    renderDocumentCreateForm();
+    fillRequiredFields();
+    const dateInputs = screen.getAllByPlaceholderText('YYYY-MM-DD');
+    fireEvent.changeText(dateInputs[1], '2024-02-30');
+    fireEvent.press(screen.getByText('Create document'));
+    expect(alertSpy).toHaveBeenCalledWith('Error', 'Expire date must be in YYYY-MM-DD format.');
+    expect(mockApiFetch).not.toHaveBeenCalled();
   });
 });

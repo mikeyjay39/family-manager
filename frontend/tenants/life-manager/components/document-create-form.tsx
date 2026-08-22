@@ -8,6 +8,7 @@ import { useProtonConnect } from '@/contexts/ProtonConnectContext';
 import { apiFetch } from '@/lib/api/client';
 import type { CreateDocumentCommand, DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
+import { parseOptionalDateInput } from './document-create-form-utils';
 
 function parseTags(input: string): string[] {
   return input
@@ -41,6 +42,8 @@ export default function DocumentCreateForm({ onDocumentCreated }: DocumentCreate
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  const [issuedDateInput, setIssuedDateInput] = useState('');
+  const [expireDateInput, setExpireDateInput] = useState('');
   const [pickedFile, setPickedFile] = useState<DocumentPickerAsset | null>(null);
   const [loading, setLoading] = useState(false);
   const { token, handleUnauthorized } = useAuth();
@@ -139,6 +142,18 @@ export default function DocumentCreateForm({ onDocumentCreated }: DocumentCreate
 
     const tags = parseTags(tagsInput);
 
+    const issuedDate = parseOptionalDateInput(issuedDateInput);
+    if (!issuedDate.ok) {
+      Alert.alert('Error', 'Issue date must be in YYYY-MM-DD format.');
+      return;
+    }
+
+    const expireDate = parseOptionalDateInput(expireDateInput);
+    if (!expireDate.ok) {
+      Alert.alert('Error', 'Expire date must be in YYYY-MM-DD format.');
+      return;
+    }
+
     setLoading(true);
     try {
       if (isWeb && pickedFile && protonSession) {
@@ -149,8 +164,8 @@ export default function DocumentCreateForm({ onDocumentCreated }: DocumentCreate
           title: title.trim(),
           content: content.trim(),
           tags,
-          issued_date: null,
-          expire_date: null,
+          issued_date: issuedDate.value,
+          expire_date: expireDate.value,
           storage: {
             provider: storage.provider,
             share_id: storage.shareId,
@@ -198,8 +213,8 @@ export default function DocumentCreateForm({ onDocumentCreated }: DocumentCreate
         title: title.trim(),
         content: content.trim(),
         tags,
-        issued_date: null,
-        expire_date: null,
+        issued_date: issuedDate.value,
+        expire_date: expireDate.value,
         storage: null,
       };
 
@@ -283,6 +298,24 @@ export default function DocumentCreateForm({ onDocumentCreated }: DocumentCreate
         value={tagsInput}
         onChangeText={setTagsInput}
         placeholder="e.g. work, notes"
+        placeholderTextColor={palette.icon}
+      />
+
+      <Text style={styles.label}>Issue date (optional)</Text>
+      <TextInput
+        style={styles.input}
+        value={issuedDateInput}
+        onChangeText={setIssuedDateInput}
+        placeholder="YYYY-MM-DD"
+        placeholderTextColor={palette.icon}
+      />
+
+      <Text style={styles.label}>Expire date (optional)</Text>
+      <TextInput
+        style={styles.input}
+        value={expireDateInput}
+        onChangeText={setExpireDateInput}
+        placeholder="YYYY-MM-DD"
         placeholderTextColor={palette.icon}
       />
 
