@@ -6,13 +6,14 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { authenticatedFetch } from '@/lib/api/client';
 import type { DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
-import DocumentGrid from './document-grid';
+import DocumentGrid, { DOCUMENT_GRID_WIDTH } from './document-grid';
 
 export function parseDocumentDto(item: unknown): DocumentDto {
   const d = item as Record<string, unknown>;
@@ -60,21 +61,47 @@ export default function DocumentList({ refreshKey = 0 }: DocumentListProps) {
           gap: 8,
           marginTop: 16,
         },
+        tableScroll: {
+          width: '100%',
+        },
+        tableScrollContent: {
+          flexGrow: 1,
+          justifyContent: 'center',
+        },
+        tableBlock: {
+          width: DOCUMENT_GRID_WIDTH,
+          gap: 8,
+        },
         toolbarRow: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 8,
+          zIndex: 1,
         },
         sectionTitle: {
           fontSize: 18,
           fontWeight: '600',
-          flex: 1,
           color: palette.text,
+          flexShrink: 1,
+          ...(Platform.OS === 'web'
+            ? ({
+                position: 'sticky',
+                left: 0,
+                backgroundColor: palette.background,
+              } as const)
+            : {}),
         },
         refreshButton: {
           paddingVertical: 8,
           paddingHorizontal: 12,
+          ...(Platform.OS === 'web'
+            ? ({
+                position: 'sticky',
+                right: 0,
+                backgroundColor: palette.background,
+              } as const)
+            : {}),
         },
         refreshButtonText: {
           fontSize: 14,
@@ -172,31 +199,52 @@ export default function DocumentList({ refreshKey = 0 }: DocumentListProps) {
     void load();
   }, [load, refreshKey]);
 
+  const toolbar = (
+    <View style={styles.toolbarRow}>
+      <Text style={styles.sectionTitle}>Your documents</Text>
+      <Button
+        variant="secondary"
+        label={loading ? 'Loading…' : 'Refresh'}
+        onPress={() => void load()}
+        disabled={loading || !token}
+        accessibilityLabel={loading ? 'Loading documents' : 'Refresh documents'}
+        style={styles.refreshButton}
+        labelStyle={styles.refreshButtonText}
+      />
+    </View>
+  );
+
+  const hasTable = token && !error && documents.length > 0;
+
   return (
     <View style={styles.container}>
-      <View style={styles.toolbarRow}>
-        <Text style={styles.sectionTitle}>Your documents</Text>
-        <Button
-          variant="secondary"
-          label={loading ? 'Loading…' : 'Refresh'}
-          onPress={() => void load()}
-          disabled={loading || !token}
-          accessibilityLabel={loading ? 'Loading documents' : 'Refresh documents'}
-          style={styles.refreshButton}
-          labelStyle={styles.refreshButtonText}
-        />
-      </View>
-
-      {!token ? (
-        <Text style={styles.hint}>Sign in to see your documents.</Text>
-      ) : loading && documents.length === 0 ? (
-        <ActivityIndicator size="small" color={palette.tint} />
-      ) : error ? (
-        <Text style={styles.errorText}>{error}</Text>
-      ) : documents.length === 0 ? (
-        <Text style={styles.hint}>No documents yet.</Text>
+      {hasTable ? (
+        <ScrollView
+          horizontal
+          style={styles.tableScroll}
+          contentContainerStyle={styles.tableScrollContent}
+          showsHorizontalScrollIndicator
+          testID="documents-table-scroll"
+        >
+          <View style={styles.tableBlock} testID="documents-table-block">
+            {toolbar}
+            <DocumentGrid documents={documents} onRowPress={setSelected} />
+          </View>
+        </ScrollView>
       ) : (
-        <DocumentGrid documents={documents} onRowPress={setSelected} />
+        <>
+          {toolbar}
+
+          {!token ? (
+            <Text style={styles.hint}>Sign in to see your documents.</Text>
+          ) : loading && documents.length === 0 ? (
+            <ActivityIndicator size="small" color={palette.tint} />
+          ) : error ? (
+            <Text style={styles.errorText}>{error}</Text>
+          ) : (
+            <Text style={styles.hint}>No documents yet.</Text>
+          )}
+        </>
       )}
 
       <Modal

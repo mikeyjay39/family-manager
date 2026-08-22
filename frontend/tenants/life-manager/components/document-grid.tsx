@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import {
   createColumnHelper,
   flexRender,
@@ -20,49 +20,64 @@ export type DocumentGridProps = {
   onRowPress: (doc: DocumentDto) => void;
 };
 
+const DOCUMENT_GRID_COLUMN_SIZES = {
+  title: 160,
+  content: 240,
+  tags: 180,
+  created_at: 110,
+  issued_date: 110,
+  expire_date: 110,
+  storage: 160,
+} as const;
+
+export const DOCUMENT_GRID_WIDTH = Object.values(DOCUMENT_GRID_COLUMN_SIZES).reduce(
+  (sum, width) => sum + width,
+  0
+);
+
 const columnHelper = createColumnHelper<DocumentDto>();
 
 function buildColumns(sortingFns: Record<string, SortingFn<DocumentDto>>) {
   return [
     columnHelper.accessor('title', {
       header: 'Title',
-      size: 160,
+      size: DOCUMENT_GRID_COLUMN_SIZES.title,
       sortingFn: sortingFns.title,
       cell: (info) => formatDocumentCellValue(info.row.original, 'title'),
     }),
     columnHelper.accessor('content', {
       header: 'Content',
-      size: 240,
+      size: DOCUMENT_GRID_COLUMN_SIZES.content,
       sortingFn: sortingFns.content,
       cell: (info) => formatDocumentCellValue(info.row.original, 'content'),
     }),
     columnHelper.accessor('tags', {
       header: 'Tags',
-      size: 180,
+      size: DOCUMENT_GRID_COLUMN_SIZES.tags,
       sortingFn: sortingFns.tags,
       cell: (info) => formatDocumentCellValue(info.row.original, 'tags'),
     }),
     columnHelper.accessor('created_at', {
       header: 'Created',
-      size: 110,
+      size: DOCUMENT_GRID_COLUMN_SIZES.created_at,
       sortingFn: sortingFns.created_at,
       cell: (info) => formatDocumentCellValue(info.row.original, 'created_at'),
     }),
     columnHelper.accessor('issued_date', {
       header: 'Issued',
-      size: 110,
+      size: DOCUMENT_GRID_COLUMN_SIZES.issued_date,
       sortingFn: sortingFns.issued_date,
       cell: (info) => formatDocumentCellValue(info.row.original, 'issued_date'),
     }),
     columnHelper.accessor('expire_date', {
       header: 'Expires',
-      size: 110,
+      size: DOCUMENT_GRID_COLUMN_SIZES.expire_date,
       sortingFn: sortingFns.expire_date,
       cell: (info) => formatDocumentCellValue(info.row.original, 'expire_date'),
     }),
     columnHelper.accessor('storage', {
       header: 'File',
-      size: 160,
+      size: DOCUMENT_GRID_COLUMN_SIZES.storage,
       sortingFn: sortingFns.storage,
       cell: (info) => formatDocumentCellValue(info.row.original, 'storage'),
     }),
@@ -106,9 +121,6 @@ export default function DocumentGrid({ documents, onRowPress }: DocumentGridProp
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        gridScroll: {
-          marginTop: 4,
-        },
         grid: {
           borderWidth: 1,
           borderColor: palette.icon,
@@ -164,9 +176,8 @@ export default function DocumentGrid({ documents, onRowPress }: DocumentGridProp
   );
 
   return (
-    <ScrollView horizontal style={styles.gridScroll} showsHorizontalScrollIndicator>
-      <View style={styles.grid}>
-        {table.getHeaderGroups().map((headerGroup) => (
+    <View style={styles.grid}>
+      {table.getHeaderGroups().map((headerGroup) => (
           <View key={headerGroup.id} style={styles.headerRow}>
             {headerGroup.headers.map((header) => {
               const headerLabel =
@@ -210,8 +221,8 @@ export default function DocumentGrid({ documents, onRowPress }: DocumentGridProp
               );
             })}
           </View>
-        ))}
-        {table.getSortedRowModel().rows.map((row, rowIndex) => (
+      ))}
+      {table.getSortedRowModel().rows.map((row, rowIndex) => (
           <TouchableOpacity
             key={row.id}
             style={[styles.dataRow, rowIndex % 2 === 1 && styles.dataRowAlt]}
@@ -232,6 +243,5 @@ export default function DocumentGrid({ documents, onRowPress }: DocumentGridProp
           </TouchableOpacity>
         ))}
       </View>
-    </ScrollView>
   );
 }
