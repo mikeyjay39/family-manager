@@ -9,7 +9,9 @@ use crate::infrastructure::document::document_tags::{
 use crate::schema::documents;
 use crate::{
     domain::document::Document,
-    infrastructure::document::document_entity::{DocumentEntity, NewDocumentEntity},
+    infrastructure::document::document_entity::{
+        storage_columns_from_ref, DocumentEntity, NewDocumentEntity,
+    },
 };
 use async_trait::async_trait;
 use deadpool_diesel::sqlite::Pool;
@@ -69,6 +71,7 @@ impl DocumentRepository for DocumentOrmCollection {
                         entity.created_at,
                         entity.issued_date,
                         entity.expire_date,
+                        entity.storage_ref(),
                     ))
                 }
                 Err(e) => {
@@ -131,6 +134,7 @@ impl DocumentRepository for DocumentOrmCollection {
                             e.created_at,
                             e.issued_date,
                             e.expire_date,
+                            e.storage_ref(),
                         ))
                     })
                     .collect(),
@@ -202,6 +206,7 @@ impl DocumentRepository for DocumentOrmCollection {
                             e.created_at,
                             e.issued_date,
                             e.expire_date,
+                            e.storage_ref(),
                         ))
                     })
                     .collect(),
@@ -219,6 +224,13 @@ impl DocumentRepository for DocumentOrmCollection {
 
     async fn save_document(&self, document: Document) -> Result<Document, Box<dyn Error>> {
         let conn = self.pool.get().await?;
+        let (
+            storage_provider,
+            storage_share_id,
+            storage_node_id,
+            storage_filename,
+            storage_mime_type,
+        ) = storage_columns_from_ref(&document.storage);
         let new_document = NewDocumentEntity {
             id: document.id.to_string(),
             title: document.title.clone(),
@@ -227,6 +239,11 @@ impl DocumentRepository for DocumentOrmCollection {
             created_at: document.created_at,
             issued_date: document.issued_date,
             expire_date: document.expire_date,
+            storage_provider,
+            storage_share_id,
+            storage_node_id,
+            storage_filename,
+            storage_mime_type,
         };
         let tag_names = document.tags.clone();
         let tag_names_for_return = tag_names.clone();
@@ -234,6 +251,7 @@ impl DocumentRepository for DocumentOrmCollection {
         let title = document.title.clone();
         let content = document.content.clone();
         let user_id = document.user_id;
+        let storage = document.storage.clone();
 
         let result = conn
             .interact(move |conn| -> QueryResult<DocumentEntity> {
@@ -261,6 +279,7 @@ impl DocumentRepository for DocumentOrmCollection {
                         saved_doc.created_at,
                         saved_doc.issued_date,
                         saved_doc.expire_date,
+                        storage,
                     ))
                 }
                 Err(e) => {

@@ -71,7 +71,7 @@ Rust is the source of truth for **HTTP contract types** (request/response DTOs).
 | Crate | Annotated types | Output |
 |-------|-----------------|--------|
 | `auth` | `LoginRequest`, `LoginResponse` in `domain/login_request.rs` | `frontend/lib/api/generated/auth/` |
-| `life-manager` | `DocumentDto`, `CreateDocumentCommand`, `GetDocumentsQueryParams` in `infrastructure/document/` | `frontend/lib/api/generated/life-manager/` |
+| `life-manager` | `DocumentDto`, `CreateDocumentCommand`, `DocumentStorageRefDto`, `GetDocumentsQueryParams` in `infrastructure/document/` | `frontend/lib/api/generated/life-manager/` |
 
 **Do not** export domain aggregates (e.g. `Document` with `user_id`) or server-only types (e.g. JWT `Claims`).
 

@@ -6,6 +6,7 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { ProtonConnectProvider } from '@/contexts/ProtonConnectContext';
 import { TenantProvider } from '@/lib/tenant/TenantContext';
 import {
   TenantThemeProvider,
@@ -58,7 +59,9 @@ export default function RootLayout() {
     <TenantProvider>
       <TenantThemeProvider>
         <AuthProvider>
-          <RootLayoutNav />
+          <ProtonConnectProvider>
+            <RootLayoutNav />
+          </ProtonConnectProvider>
           <StatusBar style="auto" />
         </AuthProvider>
       </TenantThemeProvider>

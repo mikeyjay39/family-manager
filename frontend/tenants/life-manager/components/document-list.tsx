@@ -17,6 +17,19 @@ import DocumentGrid from './document-grid';
 
 export function parseDocumentDto(item: unknown): DocumentDto {
   const d = item as Record<string, unknown>;
+  const storageRaw = d.storage as Record<string, unknown> | null | undefined;
+  const storage =
+    storageRaw && typeof storageRaw === 'object'
+      ? {
+          provider: String(storageRaw.provider ?? ''),
+          share_id: String(storageRaw.share_id ?? ''),
+          node_id: String(storageRaw.node_id ?? ''),
+          filename: String(storageRaw.filename ?? ''),
+          mime_type:
+            storageRaw.mime_type != null ? String(storageRaw.mime_type) : null,
+        }
+      : null;
+
   return {
     id: String(d.id ?? ''),
     title: String(d.title ?? ''),
@@ -25,6 +38,7 @@ export function parseDocumentDto(item: unknown): DocumentDto {
     created_at: String(d.created_at ?? ''),
     issued_date: d.issued_date != null ? String(d.issued_date) : null,
     expire_date: d.expire_date != null ? String(d.expire_date) : null,
+    storage,
   };
 }
 
@@ -99,6 +113,11 @@ export default function DocumentList() {
           fontSize: 16,
           lineHeight: 22,
           color: palette.text,
+        },
+        storageHint: {
+          fontSize: 14,
+          color: palette.icon,
+          marginBottom: 12,
         },
         modalClose: {
           borderTopWidth: StyleSheet.hairlineWidth,
@@ -193,6 +212,11 @@ export default function DocumentList() {
           <View style={styles.modalCard}>
             <ScrollView style={styles.modalScroll}>
               <Text style={styles.modalTitle}>{selected?.title ?? ''}</Text>
+              {selected?.storage?.provider === 'proton_drive' ? (
+                <Text style={styles.storageHint}>
+                  Stored in Proton Drive: {selected.storage.filename}
+                </Text>
+              ) : null}
               <Text style={styles.modalContent}>{selected?.content ?? ''}</Text>
             </ScrollView>
             <TouchableOpacity

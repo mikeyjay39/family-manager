@@ -10,6 +10,7 @@ import { ThemedView } from '@/components/themed-view';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import DocumentCreateForm from '@/tenants/life-manager/components/document-create-form';
 import DocumentList from '@/tenants/life-manager/components/document-list';
+import ProtonConnectPanel from '@/tenants/life-manager/components/proton-connect-panel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/lib/tenant/TenantContext';
 import { useColorPalette, useTenantBranding } from '@/lib/tenant/TenantThemeContext';
@@ -65,6 +66,7 @@ export default function HomeScreen() {
         </ThemedView>
         <ThemedView style={styles.stepContainer}>
           <ThemedText type="subtitle">Documents</ThemedText>
+          <ProtonConnectPanel />
           <DocumentCreateForm />
           <DocumentList />
         </ThemedView>

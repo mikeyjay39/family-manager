@@ -7,6 +7,16 @@ import { apiFetch } from '@/lib/api/client';
 import { TenantThemeTestProvider } from '@/lib/tenant/TenantThemeContext';
 import { defaultResolvedTheme } from '@/lib/tenant/theme/defaults';
 
+vi.mock('@/contexts/ProtonConnectContext', () => ({
+  useProtonConnect: vi.fn(() => ({
+    isSupported: false,
+    session: null,
+    isConnecting: false,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  })),
+}));
+
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: vi.fn(),
 }));

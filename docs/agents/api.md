@@ -13,6 +13,7 @@ Parent hub: [../../AGENTS.md](../../AGENTS.md). Routing diagrams: [../architectu
 | `POST /test-tenant/api/v1/auth/login` | JWT login (test-tenant pilot) |
 | `GET /test-tenant/api/v1/auth/protected` | Auth smoke test (test-tenant pilot) |
 | `POST /life-manager/api/v1/documents/` | Multipart: `json` (CreateDocumentCommand) + `file` |
+| `POST /life-manager/api/v1/documents/json` | JSON body: CreateDocumentCommand with required `storage` (Proton Drive ref); no file/OCR — see [Proton upload workflow](../development_faq.md#upload-workflow) |
 | `GET /life-manager/api/v1/documents/{id}` | Single document |
 | `GET /life-manager/api/v1/documents/` | Query by title |
 

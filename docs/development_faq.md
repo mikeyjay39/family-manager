@@ -118,6 +118,74 @@ JWT storage is scoped per tenant (`auth_token:<tenant-id>`) so switching tenants
 
 See `frontend/AGENTS.md` for layout conventions (`tenants/<id>/` vs shared code) and theme hooks.
 
+## Proton Drive (experimental, web only)
+
+life-manager can upload document files **directly to Proton Drive** from the **Expo web** build (desktop or mobile browser). The native Expo app still uses the backend multipart upload path without Proton.
+
+- **Connect:** Home screen → **Proton Drive (experimental)** panel. You log in to Proton in the browser; credentials stay client-side only (never sent to the life-manager backend).
+- **Upload flow:** Connect Proton → create a document with title/content → attach a file → submit. The file is encrypted and uploaded via `@protontech/drive-sdk`; metadata (Proton node IDs) is saved via `POST /life-manager/api/v1/documents/json`.
+- **OCR:** Skipped for Proton-backed uploads in v1 — enter title and content manually.
+- **Dependencies:** `@protontech/drive-sdk`, `@protontech/crypto` (see `frontend/lib/proton-drive/`).
+- **Status:** Proton’s SDK is preview-only; a breaking crypto migration is expected late 2026 / early 2027. Personal/non-commercial use only per Proton’s SDK terms.
+- **Migration:** After pulling backend changes, run `diesel migration run` for the new document storage columns.
+
+### Upload workflow
+
+The file **never reaches the life-manager backend**; only Proton node IDs and document metadata are saved in SQLite. Encrypted file bytes go straight to Proton Drive from the browser.
+
+#### Sequence (web, Proton connected)
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Form as DocumentCreateForm
+  participant ProtonLib as proton-drive
+  participant SDK as ProtonDriveSDK
+  participant DriveAPI as drive-api.proton.me
+  participant Backend as life-manager API
+  participant DB as SQLite
+
+  User->>Form: Submit title, content, file
+  Form->>Form: assetToFile(pickedFile)
+  Note over Form,DriveAPI: File bytes stay in browser. Encrypted upload goes to Proton only
+  Form->>ProtonLib: uploadToLifeManagerFolder(file)
+  ProtonLib->>SDK: getMyFilesRootFolder / ensure life-manager folder
+  SDK->>DriveAPI: volume and folder metadata
+  ProtonLib->>SDK: getFileUploader + uploadFromFile
+  SDK->>DriveAPI: encrypted file blocks
+  SDK-->>ProtonLib: shareId, nodeId, filename
+  ProtonLib-->>Form: storage ref
+  Note over Form,Backend: Backend receives JSON only (no file in request body)
+  Form->>Backend: POST /documents/json (metadata + storage ref)
+  Backend->>DB: save document row + storage columns
+  Backend-->>Form: 201 DocumentDto
+  Form-->>User: success
+```
+
+#### Trust boundaries (web vs native)
+
+```mermaid
+flowchart TB
+  subgraph browser ["Expo web browser"]
+    Connect["ProtonConnectPanel\nSRP auth + key unlock"]
+    Upload["Encrypt + upload file bytes\nvia drive-sdk"]
+    Meta["POST /documents/json\nJSON metadata + storage ref\nno file attachment"]
+  end
+  subgraph proton ["Proton cloud"]
+    AccountAPI["account.proton.me"]
+    DriveAPI["drive-api.proton.me\nstores encrypted file"]
+  end
+  subgraph lm ["life-manager backend"]
+    API["create_document_json"]
+    DB["SQLite documents\nstorage ref columns only"]
+  end
+  Connect --> AccountAPI
+  Upload -->|"file bytes"| DriveAPI
+  Meta -->|"no file bytes"| API --> DB
+  Native["Native iOS/Android"] --> Multipart["POST /documents\nmultipart file to backend"]
+  Multipart --> API
+```
+
 ### TLS in production
 
 HTTPS is not terminated inside the Rust server. Put Nginx, Caddy, or another reverse proxy in front if you need TLS; point the frontend’s API URL at the HTTPS origin clients use.
