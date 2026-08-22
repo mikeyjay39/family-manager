@@ -4,11 +4,10 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 
+import { Button } from '@/components/ui/button';
 import { useProtonConnect } from '@/contexts/ProtonConnectContext';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
 import { withAlpha } from '@/lib/tenant/theme/color-utils';
@@ -58,20 +57,7 @@ export default function ProtonConnectPanel() {
           backgroundColor: palette.background,
         },
         button: {
-          backgroundColor: palette.tint,
-          borderRadius: 8,
           paddingVertical: 12,
-          alignItems: 'center',
-        },
-        buttonSecondary: {
-          backgroundColor: withAlpha(palette.icon, 0.2),
-        },
-        buttonText: {
-          color: palette.onTint,
-          fontWeight: '600',
-        },
-        buttonTextSecondary: {
-          color: palette.text,
         },
         connectedText: {
           fontSize: 14,
@@ -134,14 +120,13 @@ export default function ProtonConnectPanel() {
       <View style={styles.container}>
         <Text style={styles.title}>Proton Drive</Text>
         <Text style={styles.connectedText}>Connected as {session.email}</Text>
-        <TouchableOpacity
-          style={[styles.button, styles.buttonSecondary]}
+        <Button
+          variant="secondary"
+          label="Disconnect"
           onPress={() => void handleDisconnect()}
-          accessibilityRole="button"
           accessibilityLabel="Disconnect Proton Drive"
-        >
-          <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Disconnect</Text>
-        </TouchableOpacity>
+          style={styles.button}
+        />
       </View>
     );
   }
@@ -190,19 +175,14 @@ export default function ProtonConnectPanel() {
         placeholder="Optional TOTP"
         placeholderTextColor={palette.icon}
       />
-      <TouchableOpacity
-        style={styles.button}
+      <Button
+        label="Connect Proton Drive"
         onPress={() => void handleConnect()}
         disabled={isConnecting}
-        accessibilityRole="button"
+        loading={isConnecting}
         accessibilityLabel="Connect Proton Drive"
-      >
-        {isConnecting ? (
-          <ActivityIndicator color={palette.onTint} />
-        ) : (
-          <Text style={styles.buttonText}>Connect Proton Drive</Text>
-        )}
-      </TouchableOpacity>
+        style={styles.button}
+      />
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
     </View>
   );

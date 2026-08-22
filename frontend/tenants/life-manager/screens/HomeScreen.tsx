@@ -1,24 +1,24 @@
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 
 import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import DocumentCreateForm from '@/tenants/life-manager/components/document-create-form';
 import DocumentList from '@/tenants/life-manager/components/document-list';
 import ProtonConnectPanel from '@/tenants/life-manager/components/proton-connect-panel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/lib/tenant/TenantContext';
-import { useColorPalette, useTenantBranding } from '@/lib/tenant/TenantThemeContext';
+import { useTenantBranding } from '@/lib/tenant/TenantThemeContext';
 
 export default function HomeScreen() {
   const { logout } = useAuth();
   const { tenant } = useTenant();
-  const palette = useColorPalette();
   const { copy, assets, headerBackground } = useTenantBranding();
   const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
 
@@ -47,22 +47,13 @@ export default function HomeScreen() {
           <HelloWave />
         </ThemedView>
         <ThemedView style={styles.stepContainer}>
-          <TouchableOpacity
-            style={[
-              styles.logoutButton,
-              {
-                backgroundColor: palette.tint,
-              },
-            ]}
+          <Button
+            label="Log Out"
             onPress={() => setLogoutDialogVisible(true)}
-            accessibilityRole="button"
             accessibilityLabel="Log out button"
             accessibilityHint="Tap to log out of your account"
-          >
-            <ThemedText style={[styles.logoutButtonText, { color: palette.onTint }]}>
-              Log Out
-            </ThemedText>
-          </TouchableOpacity>
+            style={styles.logoutButton}
+          />
         </ThemedView>
         <ThemedView style={styles.stepContainer}>
           <ThemedText type="subtitle">Documents</ThemedText>
@@ -103,13 +94,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   logoutButton: {
-    borderRadius: 8,
     padding: 12,
-    alignItems: 'center',
     marginTop: 8,
-  },
-  logoutButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

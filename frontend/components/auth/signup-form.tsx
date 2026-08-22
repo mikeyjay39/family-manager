@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
-import {
-  View,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, TextInput, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
 
 const ERROR_COLOR = '#c00';
@@ -208,28 +203,15 @@ export function SignupForm({ onSubmit, loading: externalLoading = false }: Signu
         </ThemedText>
       ) : null}
 
-      <TouchableOpacity
-        style={[
-          styles.button,
-          {
-            backgroundColor: palette.tint,
-            opacity: isBusy ? 0.6 : 1,
-          },
-        ]}
+      <Button
+        label="Create Account"
         onPress={() => void handleSignup()}
         disabled={isBusy}
-        accessibilityRole="button"
+        loading={isBusy}
         accessibilityLabel="Create account button"
         accessibilityHint="Tap to create your account"
-      >
-        {isBusy ? (
-          <ActivityIndicator color={palette.onTint} />
-        ) : (
-          <ThemedText style={[styles.buttonText, { color: palette.onTint }]}>
-            Create Account
-          </ThemedText>
-        )}
-      </TouchableOpacity>
+        style={styles.button}
+      />
     </View>
   );
 }
@@ -267,13 +249,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   button: {
-    borderRadius: 8,
     padding: 16,
-    alignItems: 'center',
     marginTop: 8,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

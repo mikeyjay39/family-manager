@@ -2,12 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { View, TextInput, Text, StyleSheet, Alert, TouchableOpacity, Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import type { DocumentPickerAsset } from 'expo-document-picker';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProtonConnect } from '@/contexts/ProtonConnectContext';
 import { apiFetch } from '@/lib/api/client';
 import type { CreateDocumentCommand, DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
-import { withAlpha } from '@/lib/tenant/theme/color-utils';
 
 function parseTags(input: string): string[] {
   return input
@@ -76,15 +76,11 @@ export default function DocumentCreateForm() {
           marginBottom: 8,
         },
         secondaryButton: {
-          backgroundColor: withAlpha(palette.icon, 0.2),
-          borderRadius: 8,
           paddingVertical: 10,
           paddingHorizontal: 14,
         },
         secondaryButtonText: {
           fontSize: 15,
-          fontWeight: '600',
-          color: palette.text,
         },
         fileName: {
           flex: 1,
@@ -102,19 +98,7 @@ export default function DocumentCreateForm() {
           fontWeight: '600',
         },
         submitButton: {
-          backgroundColor: palette.tint,
-          borderRadius: 8,
-          padding: 14,
-          alignItems: 'center',
           marginTop: 8,
-        },
-        submitButtonText: {
-          color: palette.onTint,
-          fontSize: 16,
-          fontWeight: '600',
-        },
-        buttonDisabled: {
-          opacity: 0.6,
         },
       }),
     [palette]
@@ -301,15 +285,15 @@ export default function DocumentCreateForm() {
         <Text style={styles.hint}>Connect Proton Drive above to attach files on web.</Text>
       ) : null}
       <View style={styles.fileRow}>
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={pickFile}
+        <Button
+          variant="secondary"
+          label="Choose file"
+          onPress={() => void pickFile()}
           disabled={loading || (isWeb && protonSupported && !protonSession)}
-          accessibilityRole="button"
           accessibilityLabel="Choose file"
-        >
-          <Text style={styles.secondaryButtonText}>Choose file</Text>
-        </TouchableOpacity>
+          style={styles.secondaryButton}
+          labelStyle={styles.secondaryButtonText}
+        />
         {pickedFile ? (
           <>
             <Text style={styles.fileName} numberOfLines={1}>
@@ -329,15 +313,14 @@ export default function DocumentCreateForm() {
         )}
       </View>
 
-      <TouchableOpacity
-        style={[styles.submitButton, loading && styles.buttonDisabled]}
-        onPress={handleSubmit}
+      <Button
+        label={loading ? 'Submitting…' : 'Create document'}
+        onPress={() => void handleSubmit()}
         disabled={loading}
-        accessibilityRole="button"
+        loading={loading}
         accessibilityLabel={loading ? 'Submitting document' : 'Create document'}
-      >
-        <Text style={styles.submitButtonText}>{loading ? 'Submitting…' : 'Create document'}</Text>
-      </TouchableOpacity>
+        style={styles.submitButton}
+      />
     </View>
   );
 }

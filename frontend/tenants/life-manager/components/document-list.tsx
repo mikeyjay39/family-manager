@@ -3,16 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Modal,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { authenticatedFetch } from '@/lib/api/client';
 import type { DocumentDto } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
-import { withAlpha } from '@/lib/tenant/theme/color-utils';
 import DocumentGrid from './document-grid';
 
 export function parseDocumentDto(item: unknown): DocumentDto {
@@ -70,15 +69,11 @@ export default function DocumentList() {
           color: palette.text,
         },
         refreshButton: {
-          backgroundColor: withAlpha(palette.icon, 0.2),
-          borderRadius: 8,
           paddingVertical: 8,
           paddingHorizontal: 12,
         },
         refreshButtonText: {
           fontSize: 14,
-          fontWeight: '600',
-          color: palette.text,
         },
         hint: {
           fontSize: 14,
@@ -120,15 +115,13 @@ export default function DocumentList() {
           marginBottom: 12,
         },
         modalClose: {
+          borderRadius: 0,
+          borderWidth: 0,
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: palette.icon,
           padding: 14,
-          alignItems: 'center',
-          backgroundColor: palette.background,
         },
         modalCloseText: {
-          fontSize: 16,
-          fontWeight: '600',
           color: palette.tint,
         },
       }),
@@ -179,15 +172,15 @@ export default function DocumentList() {
     <View style={styles.container}>
       <View style={styles.toolbarRow}>
         <Text style={styles.sectionTitle}>Your documents</Text>
-        <TouchableOpacity
-          style={styles.refreshButton}
+        <Button
+          variant="secondary"
+          label={loading ? 'Loading…' : 'Refresh'}
           onPress={() => void load()}
           disabled={loading || !token}
-          accessibilityRole="button"
           accessibilityLabel={loading ? 'Loading documents' : 'Refresh documents'}
-        >
-          <Text style={styles.refreshButtonText}>{loading ? 'Loading…' : 'Refresh'}</Text>
-        </TouchableOpacity>
+          style={styles.refreshButton}
+          labelStyle={styles.refreshButtonText}
+        />
       </View>
 
       {!token ? (
@@ -219,14 +212,14 @@ export default function DocumentList() {
               ) : null}
               <Text style={styles.modalContent}>{selected?.content ?? ''}</Text>
             </ScrollView>
-            <TouchableOpacity
-              style={styles.modalClose}
+            <Button
+              variant="outline"
+              label="Close"
               onPress={() => setSelected(null)}
-              accessibilityRole="button"
               accessibilityLabel="Close document"
-            >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </TouchableOpacity>
+              style={styles.modalClose}
+              labelStyle={styles.modalCloseText}
+            />
           </View>
         </View>
       </Modal>

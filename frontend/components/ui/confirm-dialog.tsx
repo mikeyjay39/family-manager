@@ -1,19 +1,12 @@
 import { BlurView } from 'expo-blur';
 import { useMemo } from 'react';
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
 
-const DESTRUCTIVE_COLOR = '#ff3b30';
 const BLUR_INTENSITY = 40;
 
 export type ConfirmDialogProps = {
@@ -75,33 +68,12 @@ export function ConfirmDialog({
           gap: 12,
           marginTop: 8,
         },
-        cancelButton: {
+        actionButton: {
           flex: 1,
-          borderRadius: 8,
           padding: 12,
-          alignItems: 'center',
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: palette.icon,
-        },
-        confirmButton: {
-          flex: 1,
-          borderRadius: 8,
-          padding: 12,
-          alignItems: 'center',
-          backgroundColor: destructive ? DESTRUCTIVE_COLOR : palette.tint,
-        },
-        cancelLabel: {
-          color: palette.text,
-          fontSize: 16,
-          fontWeight: '600',
-        },
-        confirmLabel: {
-          color: destructive ? '#fff' : palette.onTint,
-          fontSize: 16,
-          fontWeight: '600',
         },
       }),
-    [palette, destructive]
+    [palette]
   );
 
   return (
@@ -125,22 +97,20 @@ export function ConfirmDialog({
             <ThemedText type="title">{title}</ThemedText>
             <ThemedText style={styles.message}>{message}</ThemedText>
             <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
+              <Button
+                variant="outline"
+                label={cancelLabel}
                 onPress={onCancel}
                 accessibilityLabel={cancelLabel}
-                accessibilityRole="button"
-              >
-                <Text style={styles.cancelLabel}>{cancelLabel}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmButton}
+                style={styles.actionButton}
+              />
+              <Button
+                variant={destructive ? 'destructive' : 'primary'}
+                label={confirmLabel}
                 onPress={onConfirm}
                 accessibilityLabel={confirmLabel}
-                accessibilityRole="button"
-              >
-                <Text style={styles.confirmLabel}>{confirmLabel}</Text>
-              </TouchableOpacity>
+                style={styles.actionButton}
+              />
             </View>
           </View>
         </View>
