@@ -18,6 +18,10 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
   };
 });
 
+vi.mock('@/components/ui/icon-symbol', () => ({
+  IconSymbol: () => null,
+}));
+
 const mockUseAuth = vi.mocked(useAuth);
 const mockAuthenticatedFetch = vi.mocked(authenticatedFetch);
 

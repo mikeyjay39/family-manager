@@ -19,6 +19,8 @@ const MAPPING = {
   'rectangle.portrait.and.arrow.right': 'logout',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'arrow.up': 'arrow-upward',
+  'arrow.down': 'arrow-downward',
 } as IconMapping;
 
 /**
