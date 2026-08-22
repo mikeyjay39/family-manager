@@ -23,6 +23,7 @@ export default function ProtonConnectPanel() {
   const [mailboxPassword, setMailboxPassword] = useState('');
   const [totp, setTotp] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isFormExpanded, setIsFormExpanded] = useState(false);
 
   const styles = useMemo(
     () =>
@@ -57,6 +58,14 @@ export default function ProtonConnectPanel() {
           backgroundColor: palette.background,
         },
         button: {
+          paddingVertical: 12,
+        },
+        actionRow: {
+          flexDirection: 'row',
+          gap: 8,
+        },
+        actionButton: {
+          flex: 1,
           paddingVertical: 12,
         },
         connectedText: {
@@ -103,6 +112,14 @@ export default function ProtonConnectPanel() {
     }
   };
 
+  const handleCancel = () => {
+    setIsFormExpanded(false);
+    setPassword('');
+    setMailboxPassword('');
+    setTotp('');
+    setErrorMessage(null);
+  };
+
   const handleDisconnect = async () => {
     setErrorMessage(null);
     try {
@@ -128,6 +145,16 @@ export default function ProtonConnectPanel() {
           style={styles.button}
         />
       </View>
+    );
+  }
+
+  if (!isFormExpanded) {
+    return (
+      <Button
+        label="Connect Proton Drive"
+        onPress={() => setIsFormExpanded(true)}
+        accessibilityLabel="Connect Proton Drive"
+      />
     );
   }
 
@@ -175,15 +202,25 @@ export default function ProtonConnectPanel() {
         placeholder="Optional TOTP"
         placeholderTextColor={palette.icon}
       />
-      <Button
-        label="Connect Proton Drive"
-        onPress={() => void handleConnect()}
-        disabled={isConnecting}
-        loading={isConnecting}
-        accessibilityLabel="Connect Proton Drive"
-        style={styles.button}
-      />
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+      <View style={styles.actionRow}>
+        <Button
+          label="Login"
+          onPress={() => void handleConnect()}
+          disabled={isConnecting}
+          loading={isConnecting}
+          accessibilityLabel="Login to Proton Drive"
+          style={styles.actionButton}
+        />
+        <Button
+          variant="secondary"
+          label="Cancel"
+          onPress={handleCancel}
+          disabled={isConnecting}
+          accessibilityLabel="Cancel Proton Drive login"
+          style={styles.actionButton}
+        />
+      </View>
     </View>
   );
 }

@@ -38,7 +38,11 @@ export default function HomeScreen() {
       <ParallaxScrollView
         headerBackgroundColor={headerBackground}
         headerImage={
-          <Image source={assets.headerImage} style={styles.reactLogo} />
+          <Image
+            source={assets.headerImage}
+            style={styles.headerImage}
+            contentFit="cover"
+          />
         }>
         <ThemedView style={styles.titleContainer}>
           <ThemedText type="title">
@@ -89,11 +93,9 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  headerImage: {
+    width: '100%',
+    height: '100%',
     position: 'absolute',
   },
   logoutButton: {
