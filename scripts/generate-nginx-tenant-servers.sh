@@ -120,6 +120,10 @@ fi
 # Source: nginx/tenants.prod.json
 # Regenerate after adding or changing prod tenants, then commit this file.
 
+# API rate limit zone (http context via conf.d include). See nginx/README.md.
+limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+limit_req_status 429;
+
 HEADER
 
   while IFS= read -r tenant; do
@@ -146,6 +150,8 @@ server {
         default_type text/plain;
     }
 
+    include /etc/nginx/snippets/drop-junk-locations.conf;
+
     location / {
         return 301 https://\$host\$request_uri;
     }
@@ -167,7 +173,10 @@ server {
         default_type text/plain;
     }
 
+    include /etc/nginx/snippets/drop-junk-locations.conf;
+
     location ${mount_path}/api {
+        limit_req zone=api burst=20 nodelay;
         proxy_pass http://life-manager:\${APP_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
@@ -177,6 +186,7 @@ server {
     }
 
     location /api {
+        limit_req zone=api burst=20 nodelay;
         proxy_pass http://life-manager:\${APP_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
