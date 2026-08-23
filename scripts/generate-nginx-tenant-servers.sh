@@ -120,7 +120,20 @@ fi
 # Source: nginx/tenants.prod.json
 # Regenerate after adding or changing prod tenants, then commit this file.
 
+# API rate limit zone (http context via conf.d include). See nginx/README.md.
+limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+limit_req_status 429;
+
+# Client IP + Host in access logs (shipped to Loki via Alloy).
+log_format main_ext '$remote_addr - $remote_user [$time_local] '
+                    'host=$host http_host=$http_host '
+                    '"$request" $status $body_bytes_sent '
+                    '"$http_referer" "$http_user_agent"';
+access_log /var/log/nginx/access.log main_ext;
+
 HEADER
+
+  default_hostname=""
 
   while IFS= read -r tenant; do
     id="$(tenant_field "${tenant}" id)"
@@ -128,16 +141,13 @@ HEADER
     mount_path="$(tenant_field "${tenant}" mountPath)"
     is_default="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("default", False))' "${tenant}")"
     if [[ "${is_default}" == "True" ]]; then
-      listen_80="listen 80 default_server;"
-      listen_443="listen 443 ssl default_server;"
-    else
-      listen_80="listen 80;"
-      listen_443="listen 443 ssl;"
+      default_hostname="${hostname}"
     fi
 
+    # Named tenants only — unknown Host / bare IP hits the catch-all below (return 444).
     cat <<BLOCK
 server {
-    ${listen_80}
+    listen 80;
     server_name ${hostname};
 
     # HTTP-01: serve challenges on plain HTTP; do not redirect this path to HTTPS.
@@ -146,13 +156,15 @@ server {
         default_type text/plain;
     }
 
+    include /etc/nginx/snippets/drop-junk-locations.conf;
+
     location / {
         return 301 https://\$host\$request_uri;
     }
 }
 
 server {
-    ${listen_443}
+    listen 443 ssl;
     server_name ${hostname};
 
     ssl_certificate /etc/letsencrypt/live/${hostname}/fullchain.pem;
@@ -167,7 +179,10 @@ server {
         default_type text/plain;
     }
 
+    include /etc/nginx/snippets/drop-junk-locations.conf;
+
     location ${mount_path}/api {
+        limit_req zone=api burst=20 nodelay;
         proxy_pass http://life-manager:\${APP_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
@@ -177,6 +192,7 @@ server {
     }
 
     location /api {
+        limit_req zone=api burst=20 nodelay;
         proxy_pass http://life-manager:\${APP_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
@@ -197,6 +213,36 @@ server {
 
 BLOCK
   done < <(read_tenants)
+
+  if [[ -z "${default_hostname}" ]]; then
+    echo "error: no tenant with \"default\": true (needed for catch-all TLS cert)" >&2
+    exit 1
+  fi
+
+  # Reject unknown Host / IP-only hits. ACME stays on named tenant :80 blocks above.
+  cat <<CATCHALL
+# Catch-all: drop requests that do not match a tenant hostname (IP scans, spoofed Host).
+server {
+    listen 80 default_server;
+    server_name _;
+    return 444;
+}
+
+server {
+    listen 443 ssl default_server;
+    server_name _;
+
+    ssl_certificate /etc/letsencrypt/live/${default_hostname}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${default_hostname}/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    return 444;
+}
+
+CATCHALL
 } >"${OUTPUT_FILE}"
 
 echo "Wrote ${OUTPUT_FILE} (${tenant_count} tenant(s))"

@@ -114,6 +114,7 @@ services:
       - ./nginx/certbot/webroot:/var/www/certbot
       # Pick up nginx template edits without rebuilding the gateway image.
       - ./nginx/generated/tenant-servers.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
     depends_on:
       - life-manager
       - frontend
