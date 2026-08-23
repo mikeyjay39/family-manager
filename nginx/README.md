@@ -48,3 +48,15 @@ The generator wires two defenses into each tenant vhost (do not hand-edit the ge
 | API rate limit | `limit_req_zone` at top of generated config; `limit_req` on `${mountPath}/api` and `/api` only | **10 req/s** per client IP, burst **20**, `nodelay`; excess → **429** |
 
 Edit the snippet to change the denylist (Compose mounts `nginx/snippets` into the gateway; reload nginx after changes). Rate-limit knobs live in [`scripts/generate-nginx-tenant-servers.sh`](../scripts/generate-nginx-tenant-servers.sh) — regenerate and commit the template after changing them.
+
+## Access logs (client IP + Host)
+
+The generated config defines `log_format main_ext` with `$remote_addr`, `host=$host`, and `http_host=$http_host`, then sets `access_log` to that format. Alloy ships gateway stdout to Loki.
+
+| Field | Use |
+|-------|-----|
+| Leading IP (`$remote_addr`) | Public client IP |
+| `host=` | Normalized Host (or `server_name` if Host missing) |
+| `http_host=` | Raw `Host` header (domain vs instance IP vs spoof) |
+
+The backend request span also logs `host` and `client_ip` (from `X-Real-IP` / `X-Forwarded-For` set by the gateway).

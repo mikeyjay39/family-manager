@@ -124,6 +124,13 @@ fi
 limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
 limit_req_status 429;
 
+# Client IP + Host in access logs (shipped to Loki via Alloy).
+log_format main_ext '$remote_addr - $remote_user [$time_local] '
+                    'host=$host http_host=$http_host '
+                    '"$request" $status $body_bytes_sent '
+                    '"$http_referer" "$http_user_agent"';
+access_log /var/log/nginx/access.log main_ext;
+
 HEADER
 
   while IFS= read -r tenant; do

@@ -111,13 +111,28 @@ async fn build_app_with_tenants(
             ServiceBuilder::new().layer(TraceLayer::new_for_http().make_span_with(
                 |request: &Request<Body>| {
                     let trace_id = uuid::Uuid::new_v4();
+                    let host = request
+                        .headers()
+                        .get(header::HOST)
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("-");
+                    // Prefer gateway-set headers; fall back if the backend is hit directly.
+                    let client_ip = request
+                        .headers()
+                        .get("x-real-ip")
+                        .or_else(|| request.headers().get("x-forwarded-for"))
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| s.split(',').next().unwrap_or(s).trim())
+                        .unwrap_or("-");
                     tracing::span!(
                         Level::DEBUG,
                         "request",
                         method = tracing::field::display(request.method()),
                         uri = tracing::field::display(request.uri()),
                         version = tracing::field::debug(request.version()),
-                        trace_id = tracing::field::display(trace_id)
+                        trace_id = tracing::field::display(trace_id),
+                        host = tracing::field::display(host),
+                        client_ip = tracing::field::display(client_ip),
                     )
                 },
             )),
