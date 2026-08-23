@@ -48,6 +48,19 @@ The generator wires two defenses into each tenant vhost (do not hand-edit the ge
 | Junk path drops | [`snippets/drop-junk-locations.conf`](snippets/drop-junk-locations.conf), `include`d in HTTP and HTTPS servers after ACME | Scanner paths (WordPress, `.env`, `.git`, script extensions) get `444` (connection closed) |
 | API rate limit | `limit_req_zone` at top of generated config; `limit_req` on `${mountPath}/api` and `/api` only | **10 req/s** per client IP, burst **20**, `nodelay`; excess → **429** |
 
+```mermaid
+flowchart TD
+  req[Incoming request] --> hostCheck{Known tenant Host?}
+  hostCheck -->|no| drop444[Catch-all return 444]
+  hostCheck -->|yes| junk{Junk path?}
+  junk -->|yes| dropJunk[return 444]
+  junk -->|no| api{API location?}
+  api -->|yes| rate{Under rate limit?}
+  rate -->|no| tooMany[429]
+  rate -->|yes| backend[Proxy to life-manager]
+  api -->|no| frontend[Proxy to frontend]
+```
+
 Edit the snippet to change the denylist (Compose mounts `nginx/snippets` into the gateway; reload nginx after changes). Rate-limit knobs live in [`scripts/generate-nginx-tenant-servers.sh`](../scripts/generate-nginx-tenant-servers.sh) — regenerate and commit the template after changing them.
 
 ## Access logs (client IP + Host)
