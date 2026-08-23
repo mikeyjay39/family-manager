@@ -60,7 +60,7 @@ Add to [`nginx/tenants.prod.json`](nginx/tenants.prod.json):
 }
 ```
 
-Only **one** tenant may have `"default": true` (life-manager).
+Only **one** tenant may have `"default": true` (life-manager). That tenant’s cert is used on the nginx catch-all `default_server` (unknown Host / IP-only → `444`); named tenant vhosts are not `default_server`.
 
 ### 2. Backend
 

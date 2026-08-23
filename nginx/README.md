@@ -11,7 +11,7 @@ Prod vhosts are **generated** from [`tenants.prod.json`](tenants.prod.json) and 
 | `id` | Indirectly (validates `mountPath`) | Tenant identifier; must match frontend `tenants/<id>/` |
 | `hostname` | Yes | `server_name`, TLS cert path |
 | `mountPath` | Yes | `location <mountPath>/api` proxy block |
-| `default` | Yes | `default_server` on ports 80/443 (exactly one tenant) |
+| `default` | Yes | Exactly one tenant; its cert is used on the catch-all `default_server` (unknown Host / IP-only) |
 | `scope` | **No** | Documentation for add-tenant workflow (`auth-only` \| `full`); does not change generated vhosts |
 
 `scope` does not affect nginx, the backend, or the frontend at runtime. It documents intent for humans and the add-tenant skill. Tenant domain ownership is described in [docs/architecture.md](../docs/architecture.md#tenant-domain-boundaries).
@@ -44,6 +44,7 @@ The generator wires two defenses into each tenant vhost (do not hand-edit the ge
 
 | Defense | Where | Behavior |
 |---------|--------|----------|
+| Hostname allowlist | Catch-all `default_server` (`server_name _`) after named tenants | Unknown Host / IP-only requests get `444`; named tenant vhosts keep ACME for Let's Encrypt |
 | Junk path drops | [`snippets/drop-junk-locations.conf`](snippets/drop-junk-locations.conf), `include`d in HTTP and HTTPS servers after ACME | Scanner paths (WordPress, `.env`, `.git`, script extensions) get `444` (connection closed) |
 | API rate limit | `limit_req_zone` at top of generated config; `limit_req` on `${mountPath}/api` and `/api` only | **10 req/s** per client IP, burst **20**, `nodelay`; excess → **429** |
 
