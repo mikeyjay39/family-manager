@@ -16,8 +16,10 @@ Parent hub: [../../AGENTS.md](../../AGENTS.md). Routing diagrams: [../architectu
 | `GET /test-tenant/api/v1/auth/protected` | Auth smoke test (test-tenant pilot) |
 | `POST /life-manager/api/v1/documents/` | Multipart: `json` (CreateDocumentCommand) + `file` |
 | `POST /life-manager/api/v1/documents/json` | JSON body: CreateDocumentCommand with required `storage` (Proton Drive ref); no file/OCR — see [Proton upload workflow](../development_faq.md#upload-workflow) |
-| `GET /life-manager/api/v1/documents/{id}` | Single document |
+| `GET /life-manager/api/v1/documents/{id}` | Single document (owner only; other users receive 404) |
 | `GET /life-manager/api/v1/documents/` | Query by title |
+| `PUT /life-manager/api/v1/documents/json/{id}` | JSON body: UpdateDocumentCommand; optional `storage` replaces Proton ref; `storage: null` keeps existing |
+| `PUT /life-manager/api/v1/documents/{id}` | Multipart: `json` (UpdateDocumentCommand) + optional `file` (OCR on native) |
 
 Ops endpoints stay at `/api/*`. The v1 product API is namespaced under `/life-manager/api/v1/*`.
 

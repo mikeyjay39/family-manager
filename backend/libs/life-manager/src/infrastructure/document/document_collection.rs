@@ -62,6 +62,20 @@ impl DocumentRepository for DocumentCollection {
         documents.push(document.clone());
         Ok(document)
     }
+
+    async fn update_document(
+        &self,
+        document: Document,
+    ) -> Result<Document, Box<dyn std::error::Error>> {
+        tracing::info!("Updating document with ID: {}", document.id);
+        let mut documents = self.documents.lock().await;
+        let index = documents
+            .iter()
+            .position(|doc| doc.id == document.id)
+            .ok_or("Document not found")?;
+        documents[index] = document.clone();
+        Ok(document)
+    }
 }
 
 impl Default for DocumentCollection {

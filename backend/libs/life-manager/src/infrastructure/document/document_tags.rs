@@ -47,6 +47,19 @@ pub fn load_tags_by_document_ids(
     Ok(tags_by_document_id)
 }
 
+/// Removes all tag links for a document, then persists the new tag set.
+pub fn replace_document_tags(
+    conn: &mut SqliteConnection,
+    document_id: &str,
+    tag_names: &[String],
+) -> Result<(), diesel::result::Error> {
+    diesel::delete(
+        document_tags::table.filter(document_tags::document_id.eq(document_id)),
+    )
+    .execute(conn)?;
+    persist_document_tags(conn, document_id, tag_names)
+}
+
 /// Links a document to tag rows, creating global tag rows by normalized name when missing.
 pub fn persist_document_tags(
     conn: &mut SqliteConnection,

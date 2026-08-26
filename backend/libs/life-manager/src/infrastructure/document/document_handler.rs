@@ -1,9 +1,10 @@
+use std::sync::Arc;
+
 use crate::application::get_documents_query::{GetDocumentsQuery, GetDocumentsTitleCursorQuery};
 use crate::domain::document::Document;
-use crate::domain::document_storage_ref::STORAGE_PROVIDER_PROTON_DRIVE;
 use crate::domain::uploaded_document_input::UploadedDocumentInput;
 use crate::infrastructure::document::document_api_types::{
-    CreateDocumentCommand, GetDocumentsQueryParams,
+    CreateDocumentCommand, GetDocumentsQueryParams, UpdateDocumentCommand,
 };
 use crate::infrastructure::document::document_state::DocumentState;
 use crate::infrastructure::document::document_tags::normalize_tag_names;
@@ -19,6 +20,23 @@ use uuid::Uuid;
 use super::document_dto::DocumentDto;
 
 const PAGE_LIMIT: u32 = 100;
+
+/**
+* Loads a document by ID and checks if it belongs to the specified user.
+* Returns Some(Document) if the document exists and belongs to the user, otherwise returns None.
+*/
+async fn load_owned_document(
+    repo: &Arc<dyn crate::application::document_repository::DocumentRepository>,
+    id: Uuid,
+    user_id: Uuid,
+) -> Option<Document> {
+    let document = repo.get_document(id).await?;
+    if document.user_id == user_id {
+        Some(document)
+    } else {
+        None
+    }
+}
 
 /// Creates a new document by processing multipart form data.
 /// +---------+     +-----------+     +--------+     +------------------+
@@ -116,13 +134,8 @@ pub async fn create_document_json(
     State(DocumentState(document_use_cases)): State<DocumentState>,
     Json(payload): Json<CreateDocumentCommand>,
 ) -> ApiResult<DocumentDto> {
-    let storage = match payload.storage.as_ref() {
-        Some(storage) if storage.is_valid_proton_drive() => Some(storage.clone().into_domain()),
-        Some(_) => {
-            return AppResponse::validation_error(
-                "storage must be a valid proton_drive reference with share_id, node_id, and filename",
-            );
-        }
+    let storage = match payload.storage {
+        Some(storage) => storage.into_domain()?,
         None => {
             return AppResponse::validation_error(
                 "JSON document create requires storage metadata; use multipart POST /documents for file uploads",
@@ -130,19 +143,8 @@ pub async fn create_document_json(
         }
     };
 
-    if storage
-        .as_ref()
-        .is_some_and(|s| s.provider != STORAGE_PROVIDER_PROTON_DRIVE)
-    {
-        return AppResponse::validation_error("Only proton_drive storage is supported");
-    }
-
-    let mut document = Document::new_with_storage(
-        &payload.title,
-        &payload.content,
-        user_id,
-        storage,
-    );
+    let mut document =
+        Document::new_with_storage(&payload.title, &payload.content, user_id, Some(storage));
     document.tags = normalize_tag_names(&payload.tags);
     document.issued_date = payload.issued_date;
     document.expire_date = payload.expire_date;
@@ -163,7 +165,7 @@ pub async fn create_document_json(
 
 pub async fn get_document(
     AuthUser {
-        user_id: _,
+        user_id,
         tenant: _tenant,
     }: AuthUser,
     State(DocumentState(document_use_cases)): State<DocumentState>,
@@ -171,9 +173,153 @@ pub async fn get_document(
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Fetching document with ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
-    match repo.get_document(id).await {
+    match load_owned_document(&repo, id, user_id).await {
         Some(document) => AppResponse::ok(DocumentDto::from_document(&document)),
         None => AppResponse::not_found(),
+    }
+}
+
+/// Updates an existing document from JSON metadata and optional external storage reference.
+pub async fn update_document_json(
+    AuthUser {
+        user_id,
+        tenant: _tenant,
+    }: AuthUser,
+    State(DocumentState(document_use_cases)): State<DocumentState>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<UpdateDocumentCommand>,
+) -> ApiResult<DocumentDto> {
+    tracing::info!("Updating document from JSON with ID: {}", id);
+    let repo = document_use_cases.document_repository.clone();
+    let Some(mut document) = load_owned_document(&repo, id, user_id).await else {
+        return AppResponse::not_found();
+    };
+
+    document.apply_metadata_update(
+        &payload.title,
+        &payload.content,
+        normalize_tag_names(&payload.tags),
+        payload.issued_date,
+        payload.expire_date,
+    );
+
+    if let Some(storage) = payload.storage {
+        document.storage = Some(storage.into_domain()?);
+    }
+
+    document.print_details();
+
+    match repo.update_document(document).await {
+        Err(e) => {
+            tracing::error!("Error updating document: {}", e);
+            AppResponse::internal_error(e)
+        }
+        Ok(saved_doc) => {
+            tracing::info!("Document updated from JSON: {:?}", saved_doc.title);
+            AppResponse::ok(DocumentDto::from_document(&saved_doc))
+        }
+    }
+}
+
+/// Updates an existing document by processing multipart form data (optional file re-upload with OCR).
+/// +---------+     +-----------+     +--------+     +------------------+
+/// |         |     |           |     |        |     | SQLite           |
+/// | Handler |---->| Tesseract |---->| Ollama |---->| documents        |
+/// |         |     |           |     |        |     | tags/document_tags|
+/// +---------+     +-----------+     +--------+     +------------------+
+pub async fn update_document(
+    AuthUser {
+        user_id,
+        tenant: _tenant,
+    }: AuthUser,
+    State(DocumentState(document_use_cases)): State<DocumentState>,
+    Path(id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> ApiResult<DocumentDto> {
+    tracing::info!("Received multipart update for document ID: {}", id);
+    let repo = document_use_cases.document_repository.clone();
+    let Some(existing) = load_owned_document(&repo, id, user_id).await else {
+        return AppResponse::not_found();
+    };
+
+    let mut json_data: Option<UpdateDocumentCommand> = None;
+    let mut file_data = Vec::new();
+    let mut file_name = String::new();
+
+    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
+        match field.name() {
+            Some("json") => {
+                let text = field.text().await.unwrap();
+                json_data = serde_json::from_str(&text).ok();
+            }
+            Some("file") => {
+                tracing::info!("Processing file field for update");
+                if let Some(name) = field.file_name() {
+                    file_name = name.to_string();
+                }
+                file_data = field.bytes().await.unwrap().to_vec();
+                tracing::info!("Received file for update: {}", file_name);
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(payload) = json_data {
+        let has_file = !file_data.is_empty();
+        let document_opt = match has_file {
+            true => {
+                let reader = document_use_cases.reader.clone();
+                let summarizer = document_use_cases.summarizer.clone();
+                let uploaded_document_input =
+                    UploadedDocumentInput::new(file_name, file_data, user_id);
+                Document::from_file(&uploaded_document_input, reader, summarizer)
+                    .await
+                    .map(|ocr_doc| Document::with_preserved_identity_from(&existing, ocr_doc))
+            }
+            false => {
+                let mut document = existing;
+                document.apply_metadata_update(
+                    &payload.title,
+                    &payload.content,
+                    normalize_tag_names(&payload.tags),
+                    payload.issued_date,
+                    payload.expire_date,
+                );
+                Some(document)
+            }
+        };
+
+        let mut document = match document_opt {
+            Some(doc) => doc,
+            None => {
+                let err_msg = "Failed to create document from file data";
+                tracing::error!(err_msg);
+                return AppResponse::internal_error_from_msg(err_msg);
+            }
+        };
+
+        if has_file {
+            document.tags = normalize_tag_names(&payload.tags);
+            document.issued_date = payload.issued_date;
+            document.expire_date = payload.expire_date;
+        }
+
+        document.print_details();
+
+        match repo.update_document(document).await {
+            Err(e) => {
+                tracing::error!("Error updating document: {}", e);
+                AppResponse::internal_error(e)
+            }
+            Ok(saved_doc) => {
+                tracing::info!("Document updated: {:?}", saved_doc.title);
+                AppResponse::ok(DocumentDto::from_document(&saved_doc))
+            }
+        }
+    } else {
+        let err_msg = "No valid JSON data found in the multipart form";
+        tracing::warn!(err_msg);
+        AppResponse::validation_error(err_msg)
     }
 }
 
@@ -238,6 +384,7 @@ mod tests {
 
     use crate::application::document_repository::DocumentRepository;
     use crate::application::document_use_cases::DocumentUseCases;
+    use crate::domain::document_storage_ref::STORAGE_PROVIDER_PROTON_DRIVE;
     use crate::domain::document_summarizer::{DocumentSummarizer, DocumentSummaryResult};
     use crate::domain::document_text_reader::DocumentTextReader;
     use crate::infrastructure::document::document_collection::DocumentCollection;
@@ -314,6 +461,13 @@ mod tests {
             _document: Document,
         ) -> Result<Document, Box<dyn std::error::Error>> {
             Err(Box::new(std::io::Error::other("save failed")))
+        }
+
+        async fn update_document(
+            &self,
+            _document: Document,
+        ) -> Result<Document, Box<dyn std::error::Error>> {
+            Err(Box::new(std::io::Error::other("update failed")))
         }
     }
 
@@ -440,7 +594,10 @@ mod tests {
             from_slice(&bytes).expect("Failed to deserialize body");
         assert_eq!(response_document.title, "Proton Doc");
         assert_eq!(
-            response_document.storage.as_ref().map(|s| s.filename.as_str()),
+            response_document
+                .storage
+                .as_ref()
+                .map(|s| s.filename.as_str()),
             Some("scan.pdf")
         );
     }
@@ -479,8 +636,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn given_invalid_proton_storage_when_creating_document_json_then_returns_validation_error(
-    ) {
+    async fn given_invalid_proton_storage_when_creating_document_json_then_returns_validation_error()
+     {
         let payload = CreateDocumentCommand {
             title: String::from("Bad storage"),
             content: String::from("content"),
@@ -668,6 +825,188 @@ mod tests {
 
         // Assert
         assert_eq!(status_code, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn given_wrong_owner_when_getting_document_then_returns_not_found() {
+        let GivenUserAndDocuments {
+            document_use_cases,
+            document1_id,
+            ..
+        } = given_user_and_documents().await;
+        let other_user = AuthUser {
+            user_id: Uuid::new_v4(),
+            tenant: "test-tenant".to_string(),
+        };
+
+        let response = get_document(
+            other_user,
+            State(DocumentState(document_use_cases.clone())),
+            Path(document1_id),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn given_owned_document_when_updating_json_then_returns_ok_with_updated_fields() {
+        let GivenUserAndDocuments {
+            auth_user,
+            document_use_cases,
+            document1_id,
+            ..
+        } = given_user_and_documents().await;
+
+        let payload = UpdateDocumentCommand {
+            title: String::from("Updated Title"),
+            content: String::from("Updated content."),
+            tags: vec!["finance".to_string()],
+            issued_date: None,
+            expire_date: None,
+            storage: None,
+        };
+
+        let response = update_document_json(
+            auth_user,
+            State(DocumentState(document_use_cases.clone())),
+            Path(document1_id),
+            Json(payload),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read body");
+        let response_document: DocumentDto =
+            from_slice(&bytes).expect("Failed to deserialize body");
+        assert_eq!(response_document.id, document1_id);
+        assert_eq!(response_document.title, "Updated Title");
+        assert_eq!(response_document.content, "Updated content.");
+        assert_eq!(response_document.tags, vec!["finance".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn given_wrong_owner_when_updating_json_then_returns_not_found() {
+        let GivenUserAndDocuments {
+            document_use_cases,
+            document1_id,
+            ..
+        } = given_user_and_documents().await;
+        let other_user = AuthUser {
+            user_id: Uuid::new_v4(),
+            tenant: "test-tenant".to_string(),
+        };
+
+        let payload = UpdateDocumentCommand {
+            title: String::from("Updated Title"),
+            content: String::from("Updated content."),
+            tags: vec![],
+            issued_date: None,
+            expire_date: None,
+            storage: None,
+        };
+
+        let response = update_document_json(
+            other_user,
+            State(DocumentState(document_use_cases.clone())),
+            Path(document1_id),
+            Json(payload),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn given_valid_proton_storage_when_updating_document_json_then_replaces_storage() {
+        let GivenUserAndDocuments {
+            auth_user,
+            document_use_cases,
+            document1_id,
+            ..
+        } = given_user_and_documents().await;
+
+        let payload = UpdateDocumentCommand {
+            title: String::from("Proton Updated"),
+            content: String::from("Updated content."),
+            tags: vec![],
+            issued_date: None,
+            expire_date: None,
+            storage: Some(DocumentStorageRefDto {
+                provider: STORAGE_PROVIDER_PROTON_DRIVE.to_string(),
+                share_id: "share-new".to_string(),
+                node_id: "node-new".to_string(),
+                filename: "updated.pdf".to_string(),
+                mime_type: Some("application/pdf".to_string()),
+            }),
+        };
+
+        let response = update_document_json(
+            auth_user,
+            State(DocumentState(document_use_cases.clone())),
+            Path(document1_id),
+            Json(payload),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read body");
+        let response_document: DocumentDto =
+            from_slice(&bytes).expect("Failed to deserialize body");
+        assert_eq!(
+            response_document
+                .storage
+                .as_ref()
+                .map(|s| s.filename.as_str()),
+            Some("updated.pdf")
+        );
+    }
+
+    #[tokio::test]
+    async fn given_owned_document_when_updating_multipart_then_returns_ok() {
+        let GivenUserAndDocuments {
+            auth_user,
+            document_use_cases,
+            document1_id,
+            ..
+        } = given_user_and_documents().await;
+
+        let payload = UpdateDocumentCommand {
+            title: String::from("Multipart Updated"),
+            content: String::from("Updated via multipart."),
+            tags: vec!["tagged".to_string()],
+            issued_date: None,
+            expire_date: None,
+            storage: None,
+        };
+        let multipart =
+            multipart_from_parts(Some(&serde_json::to_string(&payload).unwrap()), false).await;
+
+        let response = update_document(
+            auth_user,
+            State(DocumentState(document_use_cases.clone())),
+            Path(document1_id),
+            multipart,
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read body");
+        let response_document: DocumentDto =
+            from_slice(&bytes).expect("Failed to deserialize body");
+        assert_eq!(response_document.title, "Multipart Updated");
+        assert_eq!(response_document.tags, vec!["tagged".to_string()]);
     }
 
     #[tokio::test]

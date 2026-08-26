@@ -1,3 +1,4 @@
+use backend_utils::AppError;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -28,14 +29,14 @@ impl DocumentStorageRefDto {
         }
     }
 
-    pub fn into_domain(self) -> DocumentStorageRef {
-        DocumentStorageRef {
-            provider: self.provider,
-            share_id: self.share_id,
-            node_id: self.node_id,
-            filename: self.filename,
-            mime_type: self.mime_type,
-        }
+    pub fn into_domain(mut self) -> Result<DocumentStorageRef, AppError> {
+        DocumentStorageRef::new(
+            self.provider,
+            self.share_id,
+            self.node_id,
+            self.filename,
+            self.mime_type,
+        )
     }
 
     pub fn is_valid_proton_drive(&self) -> bool {
@@ -68,6 +69,24 @@ pub struct CreateDocumentCommand {
     pub storage: Option<DocumentStorageRefDto>,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug, TS)]
+#[ts(
+    export,
+    export_to = "../../../../frontend/lib/api/generated/life-manager/UpdateDocumentCommand.ts"
+)]
+pub struct UpdateDocumentCommand {
+    pub title: String,
+    pub content: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub issued_date: Option<NaiveDateTime>,
+    #[serde(default)]
+    pub expire_date: Option<NaiveDateTime>,
+    #[serde(default)]
+    pub storage: Option<DocumentStorageRefDto>,
+}
+
 #[derive(Deserialize, Debug, Serialize, TS)]
 #[ts(
     export,
@@ -85,6 +104,7 @@ mod export_ts_bindings {
     fn export_typescript_bindings() {
         DocumentStorageRefDto::export().unwrap();
         CreateDocumentCommand::export().unwrap();
+        UpdateDocumentCommand::export().unwrap();
         GetDocumentsQueryParams::export().unwrap();
     }
 }

@@ -22,6 +22,20 @@ pub struct DocumentEntity {
     pub storage_mime_type: Option<String>,
 }
 
+#[derive(AsChangeset, Debug, Clone)]
+#[diesel(table_name = crate::schema::documents)]
+pub struct UpdateDocumentEntity {
+    pub title: String,
+    pub content: String,
+    pub issued_date: Option<NaiveDateTime>,
+    pub expire_date: Option<NaiveDateTime>,
+    pub storage_provider: Option<String>,
+    pub storage_share_id: Option<String>,
+    pub storage_node_id: Option<String>,
+    pub storage_filename: Option<String>,
+    pub storage_mime_type: Option<String>,
+}
+
 #[derive(Insertable, Debug, Clone)]
 #[diesel(table_name = crate::schema::documents)]
 pub struct NewDocumentEntity {

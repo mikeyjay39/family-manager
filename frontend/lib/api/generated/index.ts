@@ -6,3 +6,4 @@ export type { CreateDocumentCommand } from './life-manager/CreateDocumentCommand
 export type { DocumentDto } from './life-manager/DocumentDto';
 export type { DocumentStorageRefDto } from './life-manager/DocumentStorageRefDto';
 export type { GetDocumentsQueryParams } from './life-manager/GetDocumentsQueryParams';
+export type { UpdateDocumentCommand } from './life-manager/UpdateDocumentCommand';
