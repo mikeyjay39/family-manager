@@ -26,3 +26,18 @@ export function parseOptionalDateInput(value: string): ParseOptionalDateResult {
 
   return { ok: true, value: `${trimmed}T00:00:00` };
 }
+
+/** Converts an ISO datetime string (or null) to YYYY-MM-DD for date inputs. */
+export function formatIsoDateForInput(iso: string | null | undefined): string {
+  if (!iso) {
+    return '';
+  }
+  return iso.slice(0, 10);
+}
+
+export function parseTags(input: string): string[] {
+  return input
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}

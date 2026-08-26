@@ -5,14 +5,15 @@ use std::fs;
 use axum_test::TestServer;
 use chrono::NaiveDate;
 use life_manager::infrastructure::document::{
-    document_api_types::CreateDocumentCommand, document_dto::DocumentDto,
+    document_api_types::{CreateDocumentCommand, UpdateDocumentCommand}, document_dto::DocumentDto,
 };
 use reqwest::multipart::{Form, Part};
 use serial_test::serial;
 use tracing_test::traced_test;
 
 use crate::common::setup::{
-    build_auth_header, run_test_with_all_containers, run_test_with_test_profile,
+    build_auth_header, build_bearer_token_with_tenant, run_test_with_all_containers,
+    run_test_with_test_profile,
 };
 use reqwest::ClientBuilder;
 use reqwest::StatusCode;
@@ -680,6 +681,151 @@ async fn create_and_get_document_json_with_proton_storage() {
             document.storage.as_ref().map(|s| s.node_id.as_str()),
             Some("node-integration")
         );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+#[traced_test]
+async fn create_and_update_document_json() {
+    run_test_with_test_profile(|server: TestServer| async move {
+        let auth_header = build_auth_header(&server).await;
+
+        let create_payload = CreateDocumentCommand {
+            title: String::from("Before Update"),
+            content: String::from("Original content."),
+            tags: vec!["old".to_string()],
+            issued_date: None,
+            expire_date: None,
+            storage: None,
+        };
+        let json_string = serde_json::to_string(&create_payload).unwrap();
+        let multipart_body = format!(
+            "--boundary\r\n\
+        Content-Disposition: form-data; name=\"json\"\r\n\
+        Content-Type: application/json\r\n\r\n\
+        {}\r\n\
+        --boundary--",
+            json_string
+        );
+
+        let url = server
+            .server_url(DOCUMENTS_URL)
+            .expect("Failed to get server URL")
+            .to_string();
+
+        let res = reqwest::Client::new()
+            .post(&url)
+            .body(multipart_body)
+            .header("Content-Type", "multipart/form-data; boundary=boundary")
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert!(res.status().is_success());
+        let created = res.json::<DocumentDto>().await.unwrap();
+
+        let update_payload = UpdateDocumentCommand {
+            title: String::from("After Update"),
+            content: String::from("Updated content."),
+            tags: vec!["new".to_string()],
+            issued_date: None,
+            expire_date: None,
+            storage: None,
+        };
+
+        let update_url = server
+            .server_url(&format!("{}/json/{}", DOCUMENTS_URL, created.id))
+            .expect("Failed to get server URL")
+            .to_string();
+
+        let update_res = reqwest::Client::new()
+            .put(update_url)
+            .json(&update_payload)
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send update request");
+        assert!(update_res.status().is_success());
+        let updated = update_res.json::<DocumentDto>().await.unwrap();
+        assert_eq!(updated.id, created.id);
+        assert_eq!(updated.title, update_payload.title);
+        assert_eq!(updated.content, update_payload.content);
+        assert_eq!(updated.tags, vec!["new".to_string()]);
+
+        let get_url = server
+            .server_url(&format!("{}/{}", DOCUMENTS_URL, created.id))
+            .expect("Failed to get server URL")
+            .to_string();
+        let get_res = reqwest::Client::new()
+            .get(get_url)
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send get request");
+        assert!(get_res.status().is_success());
+        let fetched = get_res.json::<DocumentDto>().await.unwrap();
+        assert_eq!(fetched.title, update_payload.title);
+        assert_eq!(fetched.tags, vec!["new".to_string()]);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+#[traced_test]
+async fn given_other_users_document_when_getting_then_returns_not_found() {
+    run_test_with_test_profile(|server: TestServer| async move {
+        let auth_header = build_auth_header(&server).await;
+
+        let create_payload = CreateDocumentCommand {
+            title: String::from("Owned Document"),
+            content: String::from("Private content."),
+            tags: vec![],
+            issued_date: None,
+            expire_date: None,
+            storage: None,
+        };
+        let json_string = serde_json::to_string(&create_payload).unwrap();
+        let multipart_body = format!(
+            "--boundary\r\n\
+        Content-Disposition: form-data; name=\"json\"\r\n\
+        Content-Type: application/json\r\n\r\n\
+        {}\r\n\
+        --boundary--",
+            json_string
+        );
+
+        let url = server
+            .server_url(DOCUMENTS_URL)
+            .expect("Failed to get server URL")
+            .to_string();
+
+        let res = reqwest::Client::new()
+            .post(&url)
+            .body(multipart_body)
+            .header("Content-Type", "multipart/form-data; boundary=boundary")
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert!(res.status().is_success());
+        let created = res.json::<DocumentDto>().await.unwrap();
+
+        let other_user_header =
+            build_bearer_token_with_tenant(uuid::Uuid::new_v4(), "life-manager");
+        let get_url = server
+            .server_url(&format!("{}/{}", DOCUMENTS_URL, created.id))
+            .expect("Failed to get server URL")
+            .to_string();
+        let get_res = reqwest::Client::new()
+            .get(get_url)
+            .header("Authorization", other_user_header)
+            .send()
+            .await
+            .expect("Failed to send get request");
+        assert_eq!(get_res.status(), StatusCode::NOT_FOUND);
     })
     .await;
 }

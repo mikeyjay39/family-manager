@@ -20,4 +20,8 @@ pub trait DocumentRepository: Sync + Send {
         &self,
         document: Document,
     ) -> Result<Document, Box<dyn std::error::Error>>;
+    async fn update_document(
+        &self,
+        document: Document,
+    ) -> Result<Document, Box<dyn std::error::Error>>;
 }

@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
+use chrono::NaiveDateTime;
 use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::domain::document_storage_ref::DocumentStorageRef;
 use crate::domain::document_summarizer::DocumentSummarizer;
 use crate::domain::document_summarizer::DocumentSummaryResult;
-use crate::domain::document_storage_ref::DocumentStorageRef;
 use crate::domain::document_text_reader::DocumentTextReader;
 use crate::domain::uploaded_document_input::UploadedDocumentInput;
 
@@ -18,9 +19,9 @@ pub struct Document {
     pub content: String,
     pub tags: Vec<String>,
     pub user_id: Uuid,
-    pub created_at: chrono::NaiveDateTime,
-    pub issued_date: Option<chrono::NaiveDateTime>,
-    pub expire_date: Option<chrono::NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+    pub issued_date: Option<NaiveDateTime>,
+    pub expire_date: Option<NaiveDateTime>,
     pub storage: Option<DocumentStorageRef>,
 }
 
@@ -47,9 +48,9 @@ impl Document {
         content: &str,
         user_id: Uuid,
         tags: Vec<String>,
-        created_at: chrono::NaiveDateTime,
-        issued_date: Option<chrono::NaiveDateTime>,
-        expire_date: Option<chrono::NaiveDateTime>,
+        created_at: NaiveDateTime,
+        issued_date: Option<NaiveDateTime>,
+        expire_date: Option<NaiveDateTime>,
         storage: Option<DocumentStorageRef>,
     ) -> Self {
         Self {
@@ -132,6 +133,37 @@ impl Document {
 
     pub fn set_content(&mut self, content: String) {
         self.content = content;
+    }
+
+    /// Copies title/content/tags/dates/storage from `updated` while preserving identity fields.
+    pub fn with_preserved_identity_from(existing: &Self, updated: Self) -> Self {
+        Self {
+            id: existing.id,
+            user_id: existing.user_id,
+            created_at: existing.created_at,
+            title: updated.title,
+            content: updated.content,
+            tags: updated.tags,
+            issued_date: updated.issued_date,
+            expire_date: updated.expire_date,
+            storage: updated.storage,
+        }
+    }
+
+    /// Applies metadata fields from an update payload without changing identity or storage.
+    pub fn apply_metadata_update(
+        &mut self,
+        title: &str,
+        content: &str,
+        tags: Vec<String>,
+        issued_date: Option<NaiveDateTime>,
+        expire_date: Option<NaiveDateTime>,
+    ) {
+        self.title = title.to_string();
+        self.content = content.to_string();
+        self.tags = tags;
+        self.issued_date = issued_date;
+        self.expire_date = expire_date;
     }
 }
 

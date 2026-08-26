@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use crate::application::document_repository::DocumentRepository;
 use crate::infrastructure::document::document_tags::{
-    load_tags_by_document_ids, persist_document_tags,
+    load_tags_by_document_ids, persist_document_tags, replace_document_tags,
 };
 use crate::schema::documents;
 use crate::{
     domain::document::Document,
     infrastructure::document::document_entity::{
-        storage_columns_from_ref, DocumentEntity, NewDocumentEntity,
+        storage_columns_from_ref, DocumentEntity, NewDocumentEntity, UpdateDocumentEntity,
     },
 };
 use async_trait::async_trait;
@@ -289,6 +289,78 @@ impl DocumentRepository for DocumentOrmCollection {
             },
             Err(e) => {
                 tracing::error!("Error saving document: {}", e);
+                Err(Box::new(e))
+            }
+        }
+    }
+
+    async fn update_document(&self, document: Document) -> Result<Document, Box<dyn Error>> {
+        let conn = self.pool.get().await?;
+        let (
+            storage_provider,
+            storage_share_id,
+            storage_node_id,
+            storage_filename,
+            storage_mime_type,
+        ) = storage_columns_from_ref(&document.storage);
+        let update_entity = UpdateDocumentEntity {
+            title: document.title.clone(),
+            content: document.content.clone(),
+            issued_date: document.issued_date,
+            expire_date: document.expire_date,
+            storage_provider,
+            storage_share_id,
+            storage_node_id,
+            storage_filename,
+            storage_mime_type,
+        };
+        let tag_names = document.tags.clone();
+        let tag_names_for_return = tag_names.clone();
+        let doc_id = document.id;
+        let doc_id_str = document.id.to_string();
+        let title = document.title.clone();
+        let content = document.content.clone();
+        let user_id = document.user_id;
+        let storage = document.storage.clone();
+
+        let result = conn
+            .interact(move |conn| -> QueryResult<DocumentEntity> {
+                conn.transaction(|conn| {
+                    let updated_doc = diesel::update(
+                        documents::table.filter(documents::id.eq(&doc_id_str)),
+                    )
+                    .set(&update_entity)
+                    .returning(DocumentEntity::as_returning())
+                    .get_result::<DocumentEntity>(conn)?;
+                    replace_document_tags(conn, &updated_doc.id, &tag_names)?;
+                    Ok(updated_doc)
+                })
+            })
+            .await;
+
+        match result {
+            Ok(success) => match success {
+                Ok(saved_doc) => {
+                    tracing::info!("Document updated with ID: {}", doc_id);
+                    Ok(Document::with_id(
+                        doc_id,
+                        &title,
+                        &content,
+                        user_id,
+                        tag_names_for_return,
+                        saved_doc.created_at,
+                        saved_doc.issued_date,
+                        saved_doc.expire_date,
+                        storage,
+                    ))
+                }
+                Err(e) => {
+                    tracing::error!("Error updating document: {}", e);
+                    Err(Box::new(e))
+                }
+            },
+            Err(e) => {
+                tracing::error!("Error updating document: {}", e);
                 Err(Box::new(e))
             }
         }

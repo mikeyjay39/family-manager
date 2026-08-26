@@ -3,6 +3,7 @@ export type {
   DocumentDto,
   DocumentStorageRefDto,
   GetDocumentsQueryParams,
+  UpdateDocumentCommand,
   LoginRequest,
   LoginResponse,
   SignupRequest,

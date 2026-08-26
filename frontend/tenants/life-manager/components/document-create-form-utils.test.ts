@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseOptionalDateInput } from './document-create-form-utils';
+import {
+  formatIsoDateForInput,
+  parseOptionalDateInput,
+  parseTags,
+} from './document-create-form-utils';
 
 describe('parseOptionalDateInput', () => {
   it('returns null for empty or whitespace input', () => {
@@ -24,5 +28,22 @@ describe('parseOptionalDateInput', () => {
     expect(parseOptionalDateInput('2024-13-01')).toEqual({ ok: false });
     expect(parseOptionalDateInput('2024-02-30')).toEqual({ ok: false });
     expect(parseOptionalDateInput('not-a-date')).toEqual({ ok: false });
+  });
+});
+
+describe('formatIsoDateForInput', () => {
+  it('returns empty string for null or undefined', () => {
+    expect(formatIsoDateForInput(null)).toBe('');
+    expect(formatIsoDateForInput(undefined)).toBe('');
+  });
+
+  it('slices ISO datetime to YYYY-MM-DD', () => {
+    expect(formatIsoDateForInput('2024-06-01T00:00:00')).toBe('2024-06-01');
+  });
+});
+
+describe('parseTags', () => {
+  it('splits comma-separated tags and trims empty entries', () => {
+    expect(parseTags('tax, 2024, , finance')).toEqual(['tax', '2024', 'finance']);
   });
 });
