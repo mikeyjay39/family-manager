@@ -16,6 +16,27 @@ export interface ProtonStorageUploadResult {
   mimeType: string | null;
 }
 
+export type ProtonPreviewResult =
+  | {
+      kind: 'image';
+      blob: Blob;
+      source: 'thumbnail' | 'file';
+      filename: string;
+      mimeType: string | null;
+    }
+  | {
+      kind: 'pdf';
+      blob: Blob;
+      filename: string;
+      mimeType: string | null;
+    }
+  | {
+      kind: 'file';
+      blob: Blob;
+      filename: string;
+      mimeType: string | null;
+    };
+
 export interface ProtonAddressKey {
   id: string;
   key: PrivateKey;

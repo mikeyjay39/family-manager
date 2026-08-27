@@ -7,6 +7,12 @@ export {
   disconnectProton,
   getProtonSession,
   uploadToLifeManagerFolder,
+  fetchProtonThumbnail,
+  downloadProtonFile,
+  resolveProtonPreview,
+  triggerBrowserDownload,
 } from './index.web';
+
+export type { ProtonPreviewResult } from './index.web';
 
 export { loadPersistedTokens } from './session-store.web';

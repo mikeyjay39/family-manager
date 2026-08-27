@@ -1,12 +1,13 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import DocumentList, { parseDocumentDto } from './document-list';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProtonConnect } from '@/contexts/ProtonConnectContext';
 import { apiFetch, authenticatedFetch } from '@/lib/api/client';
 import { TenantThemeTestProvider } from '@/lib/tenant/TenantThemeContext';
 import { defaultResolvedTheme } from '@/lib/tenant/theme/defaults';
+import * as loadProton from '@/lib/proton-drive/load-proton.web';
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: vi.fn(),
@@ -33,10 +34,37 @@ vi.mock('expo-document-picker', () => ({
   getDocumentAsync: vi.fn().mockResolvedValue({ canceled: true, assets: [] }),
 }));
 
+vi.mock('@/lib/proton-drive/load-proton.web', () => ({
+  resolveProtonPreview: vi.fn(),
+  downloadProtonFile: vi.fn(),
+  triggerBrowserDownload: vi.fn(),
+  uploadToLifeManagerFolder: vi.fn(),
+}));
+
 const mockUseAuth = vi.mocked(useAuth);
 const mockUseProtonConnect = vi.mocked(useProtonConnect);
 const mockAuthenticatedFetch = vi.mocked(authenticatedFetch);
 const mockApiFetch = vi.mocked(apiFetch);
+const mockResolveProtonPreview = vi.mocked(loadProton.resolveProtonPreview);
+const mockDownloadProtonFile = vi.mocked(loadProton.downloadProtonFile);
+const mockTriggerBrowserDownload = vi.mocked(loadProton.triggerBrowserDownload);
+
+const protonDoc = {
+  id: 'doc-proton',
+  title: 'Proton Doc',
+  content: 'Body text',
+  tags: [],
+  created_at: '2026-07-11T00:00:00',
+  issued_date: null,
+  expire_date: null,
+  storage: {
+    provider: 'proton_drive',
+    share_id: 'share-1',
+    node_id: 'node-1',
+    filename: 'scan.png',
+    mime_type: 'image/png',
+  },
+};
 
 function renderDocumentList(props: { refreshKey?: number } = {}) {
   return render(
@@ -58,6 +86,13 @@ function defaultAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
   };
 }
 
+function mockWebPlatform() {
+  Object.defineProperty(Platform, 'OS', {
+    configurable: true,
+    get: () => 'web',
+  });
+}
+
 describe('DocumentList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -71,6 +106,16 @@ describe('DocumentList', () => {
     });
     mockAuthenticatedFetch.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
     vi.spyOn(Alert, 'alert').mockImplementation(() => {});
+    if (typeof URL !== 'undefined') {
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-preview');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    } else {
+      // @ts-expect-error test polyfill for node env
+      global.URL = {
+        createObjectURL: vi.fn(() => 'blob:mock-preview'),
+        revokeObjectURL: vi.fn(),
+      };
+    }
   });
 
   it('shows sign in message when there is no token', () => {
@@ -414,5 +459,263 @@ describe('parseDocumentDto', () => {
     });
     expect(parsed.issued_date).toBeNull();
     expect(parsed.expire_date).toBeNull();
+  });
+});
+
+describe('DocumentList Proton preview and download', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseAuth.mockReturnValue(defaultAuth());
+    mockUseProtonConnect.mockReturnValue({
+      session: null,
+      isSupported: false,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      isConnecting: false,
+    });
+    mockAuthenticatedFetch.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
+    vi.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockWebPlatform();
+    if (typeof URL !== 'undefined') {
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-preview');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    } else {
+      // @ts-expect-error test polyfill for node env
+      global.URL = {
+        createObjectURL: vi.fn(() => 'blob:mock-preview'),
+        revokeObjectURL: vi.fn(),
+      };
+    }
+  });
+
+  it('given proton-backed document without session when modal opens then shows connect hint and disables download', async () => {
+    // Given
+    mockWebPlatform();
+    mockUseProtonConnect.mockReturnValue({
+      session: null,
+      isSupported: true,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      isConnecting: false,
+    });
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(JSON.stringify([protonDoc]), { status: 200 })
+    );
+
+    // When
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Proton Doc')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Proton Doc'));
+
+    // Then
+    expect(screen.getByTestId('proton-preview-connect-hint')).toBeTruthy();
+    expect(
+      screen.getByText('Connect Proton Drive above to preview and download this file.')
+    ).toBeTruthy();
+    const download = screen.getByLabelText('Download document from Proton Drive');
+    expect(download).toBeTruthy();
+    expect(download.props.accessibilityState?.disabled ?? download.props.disabled).toBeTruthy();
+    expect(mockResolveProtonPreview).not.toHaveBeenCalled();
+  });
+
+  it('given proton thumbnail when modal opens then shows image preview', async () => {
+    // Given
+    mockWebPlatform();
+    mockUseProtonConnect.mockReturnValue({
+      session: { email: 'user@proton.me' },
+      isSupported: true,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      isConnecting: false,
+    });
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(JSON.stringify([protonDoc]), { status: 200 })
+    );
+    const thumbBlob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' });
+    mockResolveProtonPreview.mockResolvedValue({
+      kind: 'image',
+      blob: thumbBlob,
+      source: 'thumbnail',
+      filename: 'scan.png',
+      mimeType: 'image/png',
+    });
+
+    // When
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Proton Doc')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Proton Doc'));
+
+    // Then
+    await waitFor(() => {
+      expect(mockResolveProtonPreview).toHaveBeenCalledWith(
+        'share-1',
+        'node-1',
+        'image/png',
+        'scan.png'
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('proton-preview-image')).toBeTruthy();
+    });
+  });
+
+  it('given no thumbnail when preview falls back to downloaded image then shows image preview', async () => {
+    // Given
+    mockWebPlatform();
+    mockUseProtonConnect.mockReturnValue({
+      session: { email: 'user@proton.me' },
+      isSupported: true,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      isConnecting: false,
+    });
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(JSON.stringify([protonDoc]), { status: 200 })
+    );
+    const fileBlob = new Blob([new Uint8Array([9, 9, 9])], { type: 'image/png' });
+    mockResolveProtonPreview.mockResolvedValue({
+      kind: 'image',
+      blob: fileBlob,
+      source: 'file',
+      filename: 'scan.png',
+      mimeType: 'image/png',
+    });
+
+    // When
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Proton Doc')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Proton Doc'));
+
+    // Then
+    await waitFor(() => {
+      expect(screen.getByTestId('proton-preview-image')).toBeTruthy();
+    });
+  });
+
+  it('given proton preview loaded when download is pressed then saves the file via Proton', async () => {
+    // Given
+    mockWebPlatform();
+    mockUseProtonConnect.mockReturnValue({
+      session: { email: 'user@proton.me' },
+      isSupported: true,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      isConnecting: false,
+    });
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(JSON.stringify([protonDoc]), { status: 200 })
+    );
+    const fileBlob = new Blob([new Uint8Array([4, 5, 6])], { type: 'image/png' });
+    mockResolveProtonPreview.mockResolvedValue({
+      kind: 'image',
+      blob: fileBlob,
+      source: 'file',
+      filename: 'scan.png',
+      mimeType: 'image/png',
+    });
+    mockTriggerBrowserDownload.mockResolvedValue(undefined);
+
+    // When
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Proton Doc')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Proton Doc'));
+    await waitFor(() => {
+      expect(screen.getByTestId('proton-preview-image')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Download document from Proton Drive'));
+
+    // Then
+    await waitFor(() => {
+      expect(mockTriggerBrowserDownload).toHaveBeenCalledWith(fileBlob, 'scan.png');
+    });
+    expect(mockDownloadProtonFile).not.toHaveBeenCalled();
+  });
+
+  it('given thumbnail-only preview when download is pressed then downloads the full file', async () => {
+    // Given
+    mockWebPlatform();
+    mockUseProtonConnect.mockReturnValue({
+      session: { email: 'user@proton.me' },
+      isSupported: true,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      isConnecting: false,
+    });
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(JSON.stringify([protonDoc]), { status: 200 })
+    );
+    const thumbBlob = new Blob([new Uint8Array([1])], { type: 'image/jpeg' });
+    const fullBlob = new Blob([new Uint8Array([2, 3])], { type: 'image/png' });
+    mockResolveProtonPreview.mockResolvedValue({
+      kind: 'image',
+      blob: thumbBlob,
+      source: 'thumbnail',
+      filename: 'scan.png',
+      mimeType: 'image/png',
+    });
+    mockDownloadProtonFile.mockResolvedValue(fullBlob);
+    mockTriggerBrowserDownload.mockResolvedValue(undefined);
+
+    // When
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Proton Doc')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Proton Doc'));
+    await waitFor(() => {
+      expect(screen.getByTestId('proton-preview-image')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Download document from Proton Drive'));
+
+    // Then
+    await waitFor(() => {
+      expect(mockDownloadProtonFile).toHaveBeenCalledWith('share-1', 'node-1', 'image/png');
+      expect(mockTriggerBrowserDownload).toHaveBeenCalledWith(fullBlob, 'scan.png');
+    });
+  });
+
+  it('given document without storage when modal opens then does not show download', async () => {
+    // Given
+    mockWebPlatform();
+    mockUseProtonConnect.mockReturnValue({
+      session: { email: 'user@proton.me' },
+      isSupported: true,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      isConnecting: false,
+    });
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: '1',
+            title: 'Local Doc',
+            content: 'Body',
+            created_at: '2026-07-11T00:00:00',
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+
+    // When
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Local Doc')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Local Doc'));
+
+    // Then
+    expect(screen.queryByLabelText('Download document from Proton Drive')).toBeNull();
+    expect(screen.queryByTestId('proton-preview')).toBeNull();
+    expect(mockResolveProtonPreview).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 export type {
   ProtonActiveSession,
   ProtonStorageUploadResult,
+  ProtonPreviewResult,
 } from './types';
 export { ProtonDriveNotSupportedError } from './types';
 
@@ -21,5 +22,21 @@ export function getProtonSession(): null {
 }
 
 export async function uploadToLifeManagerFolder(): Promise<never> {
+  throw new Error('Proton Drive is only available on web.');
+}
+
+export async function fetchProtonThumbnail(): Promise<null> {
+  return null;
+}
+
+export async function downloadProtonFile(): Promise<never> {
+  throw new Error('Proton Drive is only available on web.');
+}
+
+export async function resolveProtonPreview(): Promise<never> {
+  throw new Error('Proton Drive is only available on web.');
+}
+
+export async function triggerBrowserDownload(): Promise<never> {
   throw new Error('Proton Drive is only available on web.');
 }

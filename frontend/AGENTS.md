@@ -37,7 +37,7 @@ Use `@/` path alias (`tsconfig.json`).
 
 Provider order: `TenantProvider` → `TenantThemeProvider` → `AuthProvider` → `ProtonConnectProvider` (see `app/_layout.tsx`).
 
-**Proton Drive:** `lib/proton-drive/` is resolved to `index.web.ts` on web and `index.ts` (no-op) on native. Document file uploads on web require an active Proton session; native keeps multipart POST to `/documents`.
+**Proton Drive:** `lib/proton-drive/` is resolved to `index.web.ts` on web and `index.ts` (no-op) on native. Document file uploads on web require an active Proton session; native keeps multipart POST to `/documents`. Preview and download of Proton-backed files are also web-only (SDK thumbnail, then full-file download fallback); there is no backend download route — see [development_faq.md](../docs/development_faq.md#preview-and-download-workflow).
 
 Optional `theme` block on `tenants/<id>/meta.ts` — all fields optional; unspecified values use app defaults from `lib/tenant/theme/defaults.ts`:
 
@@ -94,6 +94,7 @@ Multi-step UI flows (auth → fetch → render, wizards, tenant resolution, etc.
 | Shared login / signup | `components/auth/login-form.tsx`, `components/auth/signup-form.tsx`, `app/login.tsx`, `app/signup.tsx` |
 | Tenant home screen | `tenants/life-manager/screens/HomeScreen.tsx` |
 | List + tests | `tenants/life-manager/components/document-list.tsx`, `document-list.test.tsx` |
+| Proton preview in modal | `tenants/life-manager/components/document-proton-preview.tsx` (web; SDK thumb then download fallback) |
 | Form + tests | `tenants/life-manager/components/document-create-form.tsx`, `document-create-form.test.tsx` |
 | API client | `lib/api/client.ts` |
 | Tenant resolution | `lib/tenant/resolve.ts`, `lib/tenant/TenantContext.tsx` |

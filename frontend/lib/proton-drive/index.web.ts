@@ -1,8 +1,10 @@
 import { clearPersistedTokens, loadPersistedTokens, persistTokens } from './session-store.web';
 import { getActiveProtonSession } from './session-state.web';
-import type { ProtonActiveSession, ProtonStorageUploadResult, ConnectProtonOptions } from './types';
+import type { ConnectProtonOptions } from './auth.web';
+import type { ProtonActiveSession, ProtonStorageUploadResult } from './types';
 
-export type { ProtonActiveSession, ProtonStorageUploadResult, ConnectProtonOptions };
+export type { ProtonActiveSession, ProtonStorageUploadResult, ProtonPreviewResult } from './types';
+export type { ConnectProtonOptions } from './auth.web';
 export { ProtonDriveNotSupportedError } from './types';
 
 export function isProtonDriveSupported(): boolean {
@@ -70,4 +72,36 @@ export async function buildNodeUid(shareId: string, nodeId: string): Promise<str
 export async function getProtonNodeUrl(nodeUid: string): Promise<string | null> {
   const { getProtonNodeUrl: getUrl } = await import('./drive-client.web');
   return getUrl(nodeUid);
+}
+
+export async function fetchProtonThumbnail(
+  shareId: string,
+  nodeId: string
+): Promise<Blob | null> {
+  const { fetchProtonThumbnail: fetchThumb } = await import('./drive-client.web');
+  return fetchThumb(shareId, nodeId);
+}
+
+export async function downloadProtonFile(
+  shareId: string,
+  nodeId: string,
+  mimeType?: string | null
+): Promise<Blob> {
+  const { downloadProtonFile: download } = await import('./drive-client.web');
+  return download(shareId, nodeId, mimeType);
+}
+
+export async function resolveProtonPreview(
+  shareId: string,
+  nodeId: string,
+  mimeType: string | null,
+  filename: string
+): Promise<import('./types').ProtonPreviewResult> {
+  const { resolveProtonPreview: resolve } = await import('./drive-client.web');
+  return resolve(shareId, nodeId, mimeType, filename);
+}
+
+export async function triggerBrowserDownload(blob: Blob, filename: string): Promise<void> {
+  const { triggerBrowserDownload: trigger } = await import('./drive-client.web');
+  trigger(blob, filename);
 }

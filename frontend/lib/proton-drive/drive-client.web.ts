@@ -19,7 +19,7 @@ import {
   getActiveProtonSession as readActiveSession,
   setActiveProtonSession as writeActiveSession,
 } from './session-state.web';
-import type { ProtonActiveSession, ProtonStorageUploadResult } from './types';
+import type { ProtonActiveSession, ProtonPreviewResult, ProtonStorageUploadResult } from './types';
 import { PROTON_DRIVE_PROVIDER as PROVIDER } from './types';
 
 let driveClient: ProtonDriveClient | null = null;
@@ -170,4 +170,155 @@ export async function getProtonNodeUrl(nodeUid: string): Promise<string | null> 
 
 export function buildNodeUid(shareId: string, nodeId: string): string {
   return `${shareId}~${nodeId}`;
+}
+
+/**
+ * Fetch a decrypted Proton Drive thumbnail for a node, if one exists.
+ * Returns null when the node has no thumbnail or the download fails.
+ */
+export async function fetchProtonThumbnail(
+  shareId: string,
+  nodeId: string
+): Promise<Blob | null> {
+  try {
+    const client = await getClient();
+    const nodeUid = buildNodeUid(shareId, nodeId);
+    for await (const result of client.iterateThumbnails([nodeUid])) {
+      if (result.ok) {
+        // Drive thumbnails are JPEG-encoded preview images.
+        return new Blob([result.thumbnail.buffer.slice(
+          result.thumbnail.byteOffset,
+          result.thumbnail.byteOffset + result.thumbnail.byteLength
+        ) as ArrayBuffer], { type: 'image/jpeg' });
+      }
+      return null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Download and decrypt the full file for a Proton Drive node into a Blob.
+ *
+ * The Drive SDK may throw IntegrityError after writing decrypted bytes when
+ * manifest/signature verification fails. Per SDK contract, check
+ * `isDownloadCompleteWithSignatureIssues()` and keep the bytes (with a warning).
+ */
+export async function downloadProtonFile(
+  shareId: string,
+  nodeId: string,
+  mimeType?: string | null
+): Promise<Blob> {
+  const client = await getClient();
+  const nodeUid = buildNodeUid(shareId, nodeId);
+  const downloader = await client.getFileDownloader(nodeUid);
+  const chunks: Uint8Array[] = [];
+  const stream = new WritableStream<Uint8Array>({
+    write(chunk) {
+      chunks.push(chunk);
+    },
+  });
+  const controller = downloader.downloadToStream(stream);
+  try {
+    await controller.completion();
+  } catch (error) {
+    if (controller.isDownloadCompleteWithSignatureIssues() && chunks.length > 0) {
+      console.warn(
+        'Proton Drive download completed with signature verification issues; using decrypted bytes anyway.',
+        error
+      );
+    } else {
+      throw error;
+    }
+  }
+
+  const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+  const merged = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new Blob(
+    [merged.buffer.slice(merged.byteOffset, merged.byteOffset + merged.byteLength) as ArrayBuffer],
+    {
+      type: mimeType?.trim() || 'application/octet-stream',
+    }
+  );
+}
+
+/**
+ * Load a modal preview for a Proton-backed document.
+ *
+ * ```
+ * DocumentList (view modal)
+ *   -> resolveProtonPreview(shareId, nodeId, mime, filename)
+ *        -> fetchProtonThumbnail
+ *             |-- ok --> image (thumbnail)
+ *             +-- miss/err
+ *                   -> downloadProtonFile
+ *                        |-- image/* --> image (file)
+ *                        |-- application/pdf --> pdf
+ *                        +-- else --> file card (+ blob for Download)
+ *   [Download] -> reuse full-file blob if cached / downloadProtonFile -> browser save
+ * ```
+ */
+export async function resolveProtonPreview(
+  shareId: string,
+  nodeId: string,
+  mimeType: string | null,
+  filename: string
+): Promise<ProtonPreviewResult> {
+  const thumbnail = await fetchProtonThumbnail(shareId, nodeId);
+  if (thumbnail) {
+    return {
+      kind: 'image',
+      blob: thumbnail,
+      source: 'thumbnail',
+      filename,
+      mimeType: mimeType ?? thumbnail.type,
+    };
+  }
+
+  const fileBlob = await downloadProtonFile(shareId, nodeId, mimeType);
+  const resolvedMime = (mimeType || fileBlob.type || '').toLowerCase();
+  if (resolvedMime.startsWith('image/')) {
+    return {
+      kind: 'image',
+      blob: fileBlob,
+      source: 'file',
+      filename,
+      mimeType: mimeType ?? (fileBlob.type || null),
+    };
+  }
+  if (resolvedMime === 'application/pdf') {
+    return {
+      kind: 'pdf',
+      blob: fileBlob,
+      filename,
+      mimeType: mimeType ?? 'application/pdf',
+    };
+  }
+  return {
+    kind: 'file',
+    blob: fileBlob,
+    filename,
+    mimeType: mimeType ?? (fileBlob.type || null),
+  };
+}
+
+/** Trigger a browser "Save as" for a decrypted Proton file blob (web only). */
+export function triggerBrowserDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename || 'download';
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
