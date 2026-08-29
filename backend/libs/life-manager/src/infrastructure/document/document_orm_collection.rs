@@ -31,7 +31,7 @@ impl DocumentOrmCollection {
 
 #[async_trait]
 impl DocumentRepository for DocumentOrmCollection {
-    async fn get_document(&self, id: Uuid) -> Option<Document> {
+    async fn get_document(&self, id: &Uuid) -> Option<Document> {
         tracing::info!("Retrieving document with ID: {}", id);
         let conn = self
             .pool
@@ -361,9 +361,9 @@ impl DocumentRepository for DocumentOrmCollection {
         }
     }
 
-    async fn load_owned_document(&self, id: Uuid, user_id: Uuid) -> Option<Document> {
+    async fn load_owned_document(&self, id: &Uuid, user_id: &Uuid) -> Option<Document> {
         let document = self.get_document(id).await?;
-        if document.user_id == user_id {
+        if document.user_id == *user_id {
             Some(document)
         } else {
             tracing::warn!(

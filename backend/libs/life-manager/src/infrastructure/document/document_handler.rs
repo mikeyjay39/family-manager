@@ -5,7 +5,7 @@ use crate::application::get_documents_query::{GetDocumentsQuery, GetDocumentsTit
 use crate::domain::document::Document;
 use crate::domain::uploaded_document_input::UploadedDocumentInput;
 use crate::infrastructure::document::document_api_types::{
-    CreateDocumentCommand, GetDocumentsQueryParams, UpdateDocumentCommand,
+    CreateDocumentCommandDto, GetDocumentsQueryParams, UpdateDocumentCommandDto,
 };
 use crate::infrastructure::document::document_state::DocumentState;
 use crate::infrastructure::document::document_tags::normalize_tag_names;
@@ -31,7 +31,7 @@ async fn load_owned_document(
     id: Uuid,
     user_id: Uuid,
 ) -> Option<Document> {
-    let document = repo.get_document(id).await?;
+    let document = repo.get_document(&id).await?;
     if document.user_id == user_id {
         Some(document)
     } else {
@@ -54,7 +54,7 @@ pub async fn create_document(
     mut multipart: Multipart,
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Received multipart form data");
-    let mut json_data: Option<CreateDocumentCommand> = None;
+    let mut json_data: Option<CreateDocumentCommandDto> = None;
     let mut file_data = Vec::new();
     let mut file_name = String::new();
 
@@ -133,7 +133,7 @@ pub async fn create_document_json(
         tenant: _tenant,
     }: AuthUser,
     State(DocumentState(document_use_cases)): State<DocumentState>,
-    Json(payload): Json<CreateDocumentCommand>,
+    Json(payload): Json<CreateDocumentCommandDto>,
 ) -> ApiResult<DocumentDto> {
     let storage = match payload.storage {
         Some(storage) => storage.into_domain()?,
@@ -174,7 +174,7 @@ pub async fn get_document(
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Fetching document with ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
-    repo.load_owned_document(id, user_id).await.map_or_else(
+    repo.load_owned_document(&id, &user_id).await.map_or_else(
         || AppResponse::not_found(),
         |doc| {
             tracing::info!("Document found: {:?}", doc.title);
@@ -215,11 +215,11 @@ pub async fn update_document_json(
     }: AuthUser,
     State(DocumentState(document_use_cases)): State<DocumentState>,
     Path(id): Path<Uuid>,
-    Json(payload): Json<UpdateDocumentCommand>,
+    Json(payload): Json<UpdateDocumentCommandDto>,
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Updating document from JSON with ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
-    let mut document = match repo.load_owned_document(id, user_id).await {
+    let mut document = match repo.load_owned_document(&id, &user_id).await {
         Some(doc) => doc,
         None => return AppResponse::not_found(),
     };
@@ -267,11 +267,11 @@ pub async fn update_document(
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Received multipart update for document ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
-    let Some(existing) = &repo.load_owned_document(id, user_id).await else {
+    let Some(existing) = &repo.load_owned_document(&id, &user_id).await else {
         return AppResponse::not_found();
     };
 
-    let mut json_data: Option<UpdateDocumentCommand> = None;
+    let mut json_data: Option<UpdateDocumentCommandDto> = None;
     let mut file_data = Vec::new();
     let mut file_name = String::new();
 
@@ -468,7 +468,7 @@ mod tests {
 
     #[async_trait]
     impl DocumentRepository for MockFailingDocumentRepository {
-        async fn get_document(&self, _id: Uuid) -> Option<Document> {
+        async fn get_document(&self, _id: &Uuid) -> Option<Document> {
             None
         }
 
@@ -503,7 +503,7 @@ mod tests {
             Err(Box::new(std::io::Error::other("delete failed")))
         }
 
-        async fn load_owned_document(&self, id: Uuid, _user_id: Uuid) -> Option<Document> {
+        async fn load_owned_document(&self, id: &Uuid, _user_id: &Uuid) -> Option<Document> {
             self.get_document(id).await
         }
     }
@@ -524,7 +524,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_document() {
         // Arrange
-        let payload = CreateDocumentCommand {
+        let payload = CreateDocumentCommandDto {
             title: String::from("Test Document"),
             content: String::from("This is test content."),
             tags: vec!["Tax".to_string()],
@@ -595,7 +595,7 @@ mod tests {
 
     #[tokio::test]
     async fn given_valid_proton_storage_when_creating_document_json_then_returns_created() {
-        let payload = CreateDocumentCommand {
+        let payload = CreateDocumentCommandDto {
             title: String::from("Proton Doc"),
             content: String::from("Manual content."),
             tags: vec!["drive".to_string()],
@@ -641,7 +641,7 @@ mod tests {
 
     #[tokio::test]
     async fn given_missing_storage_when_creating_document_json_then_returns_validation_error() {
-        let payload = CreateDocumentCommand {
+        let payload = CreateDocumentCommandDto {
             title: String::from("No storage"),
             content: String::from("content"),
             tags: vec![],
@@ -675,7 +675,7 @@ mod tests {
     #[tokio::test]
     async fn given_invalid_proton_storage_when_creating_document_json_then_returns_validation_error()
      {
-        let payload = CreateDocumentCommand {
+        let payload = CreateDocumentCommandDto {
             title: String::from("Bad storage"),
             content: String::from("content"),
             tags: vec![],
@@ -744,7 +744,7 @@ mod tests {
     #[tokio::test]
     async fn given_from_file_failure_when_creating_document_then_returns_internal_error() {
         // Given
-        let payload = CreateDocumentCommand {
+        let payload = CreateDocumentCommandDto {
             title: String::from("Test Document"),
             content: String::from("This is test content."),
             tags: vec![],
@@ -782,7 +782,7 @@ mod tests {
     #[tokio::test]
     async fn given_save_failure_when_creating_document_then_returns_internal_error() {
         // Given
-        let payload = CreateDocumentCommand {
+        let payload = CreateDocumentCommandDto {
             title: String::from("Test Document"),
             content: String::from("This is test content."),
             tags: vec![],
@@ -980,7 +980,7 @@ mod tests {
             ..
         } = given_user_and_documents().await;
 
-        let payload = UpdateDocumentCommand {
+        let payload = UpdateDocumentCommandDto {
             title: String::from("Updated Title"),
             content: String::from("Updated content."),
             tags: vec!["finance".to_string()],
@@ -1022,7 +1022,7 @@ mod tests {
             tenant: "test-tenant".to_string(),
         };
 
-        let payload = UpdateDocumentCommand {
+        let payload = UpdateDocumentCommandDto {
             title: String::from("Updated Title"),
             content: String::from("Updated content."),
             tags: vec![],
@@ -1052,7 +1052,7 @@ mod tests {
             ..
         } = given_user_and_documents().await;
 
-        let payload = UpdateDocumentCommand {
+        let payload = UpdateDocumentCommandDto {
             title: String::from("Proton Updated"),
             content: String::from("Updated content."),
             tags: vec![],
@@ -1100,7 +1100,7 @@ mod tests {
             ..
         } = given_user_and_documents().await;
 
-        let payload = UpdateDocumentCommand {
+        let payload = UpdateDocumentCommandDto {
             title: String::from("Multipart Updated"),
             content: String::from("Updated via multipart."),
             tags: vec!["tagged".to_string()],

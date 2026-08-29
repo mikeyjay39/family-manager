@@ -8,7 +8,7 @@ use crate::domain::document::Document;
  */
 #[async_trait]
 pub trait DocumentRepository: Sync + Send {
-    async fn get_document(&self, id: Uuid) -> Option<Document>;
+    async fn get_document(&self, id: &Uuid) -> Option<Document>;
     async fn get_documents(&self, user_id: &Uuid, limit: &u32) -> Vec<Document>;
     async fn get_documents_title_cursor(
         &self,
@@ -26,5 +26,5 @@ pub trait DocumentRepository: Sync + Send {
     ) -> Result<Document, Box<dyn std::error::Error>>;
     /// Deletes the document by id. Returns `true` if a row was removed.
     async fn delete_document(&self, id: Uuid) -> Result<bool, Box<dyn std::error::Error>>;
-    async fn load_owned_document(&self, id: Uuid, user_id: Uuid) -> Option<Document>;
+    async fn load_owned_document(&self, id: &Uuid, user_id: &Uuid) -> Option<Document>;
 }

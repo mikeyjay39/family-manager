@@ -1,5 +1,7 @@
+use chrono::NaiveDateTime;
 use uuid::Uuid;
 
+#[derive(Clone, Debug)]
 /**
 * Structure representing an uploaded document input.
 */
@@ -10,6 +12,11 @@ pub struct UploadedDocumentInput {
     pub file_data: Vec<u8>,
     pub extension: String,
     pub user_id: Uuid,
+    pub title: String,
+    pub content: Option<String>,
+    pub tags: Vec<String>,
+    pub issued_date: Option<NaiveDateTime>,
+    pub expire_date: Option<NaiveDateTime>,
 }
 
 impl UploadedDocumentInput {

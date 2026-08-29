@@ -82,12 +82,12 @@ impl Document {
      * Creates a Document from file bytes by reading the text and summarizing it.
      */
     pub async fn from_file(
-        uploaded_document_input: &UploadedDocumentInput,
+        uploaded_document_input: UploadedDocumentInput,
         reader: Arc<dyn DocumentTextReader>,
         summarizer: Arc<dyn DocumentSummarizer>,
     ) -> Option<Document> {
         tracing::info!("Document::from_file");
-        let text = match reader.read_image(uploaded_document_input).await {
+        let text = match reader.read_image(&uploaded_document_input).await {
             Ok(t) => t,
             Err(e) => {
                 tracing::error!("Error reading document text: {}", e);
@@ -110,7 +110,7 @@ impl Document {
             id: Uuid::new_v4(),
             title,
             content: summary,
-            tags: vec![],
+            tags: uploaded_document_input.tags,
             user_id: uploaded_document_input.user_id,
             created_at: Utc::now().naive_utc(),
             issued_date: None,
@@ -431,7 +431,7 @@ mod tests {
             "Generated Title".to_string(),
         ));
 
-        let doc = Document::from_file(&input, reader, summarizer)
+        let doc = Document::from_file(input, reader, summarizer)
             .await
             .expect("Should create document");
 
@@ -454,7 +454,7 @@ mod tests {
             "Title".to_string(),
         ));
 
-        let result = Document::from_file(&input, reader, summarizer).await;
+        let result = Document::from_file(input, reader, summarizer).await;
         assert!(result.is_none());
     }
 
@@ -467,7 +467,7 @@ mod tests {
 
         let summarizer = Arc::new(MockSummarizer::error("Failed to summarize".to_string()));
 
-        let result = Document::from_file(&input, reader, summarizer).await;
+        let result = Document::from_file(input, reader, summarizer).await;
         assert!(result.is_none());
     }
 
@@ -480,7 +480,7 @@ mod tests {
 
         let summarizer = Arc::new(MockSummarizer::success(String::new(), String::new()));
 
-        let doc = Document::from_file(&input, reader, summarizer)
+        let doc = Document::from_file(input, reader, summarizer)
             .await
             .expect("Should create document even with empty strings");
 
@@ -504,7 +504,7 @@ mod tests {
             long_title.clone(),
         ));
 
-        let doc = Document::from_file(&input, reader, summarizer)
+        let doc = Document::from_file(input, reader, summarizer)
             .await
             .expect("Should handle very long text");
 
@@ -526,7 +526,7 @@ mod tests {
             "Título con ñ".to_string(),
         ));
 
-        let doc = Document::from_file(&input, reader, summarizer)
+        let doc = Document::from_file(input, reader, summarizer)
             .await
             .expect("Should handle unicode");
 
