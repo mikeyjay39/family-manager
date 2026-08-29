@@ -74,16 +74,17 @@ function renderDocumentList(props: { refreshKey?: number } = {}) {
   );
 }
 
-function defaultAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
+function defaultAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}): ReturnType<typeof useAuth> {
   return {
     token: 'tok',
     handleUnauthorized: vi.fn(),
     isAuthenticated: true,
     isLoading: false,
     login: vi.fn(),
+    signup: vi.fn(),
     logout: vi.fn(),
     ...overrides,
-  };
+  } as ReturnType<typeof useAuth>;
 }
 
 function mockWebPlatform() {

@@ -191,10 +191,13 @@ export async function fetchProtonThumbnail(
           result.thumbnail.byteOffset + result.thumbnail.byteLength
         ) as ArrayBuffer], { type: 'image/jpeg' });
       }
+      console.log('No thumbnail for Proton Drive node', shareId, nodeId, result.error);
       return null;
     }
+    console.warn('No thumbnail found for Proton Drive node', shareId, nodeId);
     return null;
-  } catch {
+  } catch (error) {
+    console.error('Failed to fetch Proton Drive thumbnail for node', shareId, nodeId, error);
     return null;
   }
 }
@@ -283,6 +286,7 @@ export async function resolveProtonPreview(
     };
   }
 
+  console.log('No thumbnail found for Proton Drive node', shareId, nodeId, 'falling back to full file download');
   const fileBlob = await downloadProtonFile(shareId, nodeId, mimeType);
   const resolvedMime = (mimeType || fileBlob.type || '').toLowerCase();
   if (resolvedMime.startsWith('image/')) {

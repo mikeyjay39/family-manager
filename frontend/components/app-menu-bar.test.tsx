@@ -40,6 +40,7 @@ describe('AppMenuBar', () => {
       isAuthenticated: true,
       isLoading: false,
       login: vi.fn(),
+      signup: vi.fn(),
       handleUnauthorized: vi.fn(),
     });
   });
@@ -64,6 +65,7 @@ describe('AppMenuBar', () => {
       isAuthenticated: true,
       isLoading: false,
       login: vi.fn(),
+      signup: vi.fn(),
       handleUnauthorized: vi.fn(),
     });
 
