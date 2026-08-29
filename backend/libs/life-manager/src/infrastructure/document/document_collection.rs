@@ -85,7 +85,7 @@ impl DocumentRepository for DocumentCollection {
         Ok(documents.len() < before)
     }
 
-    async fn load_owned_document(id: Uuid, user_id: Uuid) -> Option<Document> {
+    async fn load_owned_document(&self, id: Uuid, user_id: Uuid) -> Option<Document> {
         self.documents
             .lock()
             .await
