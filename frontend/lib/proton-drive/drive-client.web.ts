@@ -21,6 +21,7 @@ import {
 } from './session-state.web';
 import type { ProtonActiveSession, ProtonPreviewResult, ProtonStorageUploadResult } from './types';
 import { PROTON_DRIVE_PROVIDER as PROVIDER } from './types';
+import { isProtonNodeAlreadyGoneError } from './trash-result';
 
 let driveClient: ProtonDriveClient | null = null;
 
@@ -170,6 +171,29 @@ export async function getProtonNodeUrl(nodeUid: string): Promise<string | null> 
 
 export function buildNodeUid(shareId: string, nodeId: string): string {
   return `${shareId}~${nodeId}`;
+}
+
+/**
+ * Move a Proton Drive file to trash. Missing / already-trashed nodes are treated as success.
+ */
+export async function trashProtonFile(shareId: string, nodeId: string): Promise<void> {
+  const client = await getClient();
+  const nodeUid = buildNodeUid(shareId, nodeId);
+  let sawResult = false;
+  for await (const result of client.trashNodes([nodeUid])) {
+    sawResult = true;
+    if (result.ok) {
+      return;
+    }
+    if (isProtonNodeAlreadyGoneError(result.error)) {
+      return;
+    }
+    throw new Error(result.error || 'Failed to trash Proton Drive file.');
+  }
+  if (!sawResult) {
+    // No result from the generator — treat as already gone / nothing to do.
+    return;
+  }
 }
 
 /**

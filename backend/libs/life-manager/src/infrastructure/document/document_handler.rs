@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::application::delete_document_command::DeleteDocumentCommand;
 use crate::application::get_documents_query::{GetDocumentsQuery, GetDocumentsTitleCursorQuery};
 use crate::domain::document::Document;
 use crate::domain::uploaded_document_input::UploadedDocumentInput;
@@ -173,10 +174,37 @@ pub async fn get_document(
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Fetching document with ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
-    match load_owned_document(&repo, id, user_id).await {
-        Some(document) => AppResponse::ok(DocumentDto::from_document(&document)),
-        None => AppResponse::not_found(),
-    }
+    repo.load_owned_document(id, user_id).await.map_or_else(
+        || AppResponse::not_found(),
+        |doc| {
+            tracing::info!("Document found: {:?}", doc.title);
+            AppResponse::ok(DocumentDto::from_document(&doc))
+        },
+    )
+}
+
+/// Deletes an owned document from Life Manager (hard delete).
+/// Proton Drive file removal is client-side and must happen before this call when storage exists.
+///
+/// +--------+     +------------------+     +--------+
+/// |        |     |                  |     | SQLite |
+/// | Client |---->| delete_document  |---->| DELETE |
+/// |        |     | (owner check)    |     | docs   |
+/// +--------+     +------------------+     +--------+
+///      |                                          |
+///      |  (optional, beforehand)                  |
+///      +----> Proton Drive trashNodes ------------+
+pub async fn delete_document(
+    AuthUser {
+        user_id,
+        tenant: _tenant,
+    }: AuthUser,
+    State(DocumentState(document_use_cases)): State<DocumentState>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<()> {
+    DeleteDocumentCommand::new(id, user_id, document_use_cases.document_repository.clone())
+        .execute()
+        .await
 }
 
 /// Updates an existing document from JSON metadata and optional external storage reference.
@@ -191,8 +219,9 @@ pub async fn update_document_json(
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Updating document from JSON with ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
-    let Some(mut document) = load_owned_document(&repo, id, user_id).await else {
-        return AppResponse::not_found();
+    let mut document = match repo.load_owned_document(id, user_id).await {
+        Some(doc) => doc,
+        None => return AppResponse::not_found(),
     };
 
     document.apply_metadata_update(
@@ -238,7 +267,7 @@ pub async fn update_document(
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Received multipart update for document ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
-    let Some(existing) = load_owned_document(&repo, id, user_id).await else {
+    let Some(existing) = &repo.load_owned_document(id, user_id).await else {
         return AppResponse::not_found();
     };
 
@@ -274,10 +303,10 @@ pub async fn update_document(
                     UploadedDocumentInput::new(file_name, file_data, user_id);
                 Document::from_file(&uploaded_document_input, reader, summarizer)
                     .await
-                    .map(|ocr_doc| Document::with_preserved_identity_from(&existing, ocr_doc))
+                    .map(|ocr_doc| Document::with_preserved_identity_from(existing, ocr_doc))
             }
             false => {
-                let mut document = existing;
+                let mut document: Document = existing.clone();
                 document.apply_metadata_update(
                     &payload.title,
                     &payload.content,
@@ -468,6 +497,14 @@ mod tests {
             _document: Document,
         ) -> Result<Document, Box<dyn std::error::Error>> {
             Err(Box::new(std::io::Error::other("update failed")))
+        }
+
+        async fn delete_document(&self, _id: Uuid) -> Result<bool, Box<dyn std::error::Error>> {
+            Err(Box::new(std::io::Error::other("delete failed")))
+        }
+
+        async fn load_owned_document(&self, id: Uuid, _user_id: Uuid) -> Option<Document> {
+            self.get_document(id).await
         }
     }
 
@@ -848,6 +885,90 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn given_owned_document_when_deleting_then_returns_no_content() {
+        let GivenUserAndDocuments {
+            auth_user,
+            document_use_cases,
+            document1_id,
+            ..
+        } = given_user_and_documents().await;
+
+        let response = delete_document(
+            AuthUser {
+                user_id: auth_user.user_id,
+                tenant: auth_user.tenant.clone(),
+            },
+            State(DocumentState(document_use_cases.clone())),
+            Path(document1_id),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let get_after = get_document(
+            auth_user,
+            State(DocumentState(document_use_cases)),
+            Path(document1_id),
+        )
+        .await
+        .into_response();
+        assert_eq!(get_after.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn given_missing_document_when_deleting_then_returns_not_found() {
+        let GivenUserAndDocuments {
+            auth_user,
+            document_use_cases,
+            ..
+        } = given_user_and_documents().await;
+
+        let response = delete_document(
+            auth_user,
+            State(DocumentState(document_use_cases)),
+            Path(Uuid::new_v4()),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn given_wrong_owner_when_deleting_document_then_returns_not_found() {
+        let GivenUserAndDocuments {
+            auth_user,
+            document_use_cases,
+            document1_id,
+            ..
+        } = given_user_and_documents().await;
+        let other_user = AuthUser {
+            user_id: Uuid::new_v4(),
+            tenant: "test-tenant".to_string(),
+        };
+
+        let response = delete_document(
+            other_user,
+            State(DocumentState(document_use_cases.clone())),
+            Path(document1_id),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let get_response = get_document(
+            auth_user,
+            State(DocumentState(document_use_cases)),
+            Path(document1_id),
+        )
+        .await
+        .into_response();
+        assert_eq!(get_response.status(), StatusCode::OK);
     }
 
     #[tokio::test]

@@ -14,6 +14,7 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import type { DocumentPickerAsset } from 'expo-document-picker';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProtonConnect } from '@/contexts/ProtonConnectContext';
 import { apiFetch, authenticatedFetch } from '@/lib/api/client';
@@ -110,6 +111,8 @@ export default function DocumentList({
   const [protonDownloading, setProtonDownloading] = useState(false);
   /** Full-file blob when preview already downloaded the file (not a thumbnail-only image). */
   const [cachedFullFileBlob, setCachedFullFileBlob] = useState<Blob | null>(null);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const isProtonStorage =
     selected?.storage?.provider === 'proton_drive' && Boolean(selected.storage.share_id);
@@ -309,6 +312,8 @@ export default function DocumentList({
     setProtonPreviewError(null);
     setProtonDownloading(false);
     setCachedFullFileBlob(null);
+    setDeleteDialogVisible(false);
+    setDeleting(false);
   }, []);
 
   useEffect(() => {
@@ -435,6 +440,85 @@ export default function DocumentList({
     setIsEditing(false);
     setPickedFile(null);
   }, [populateEditDrafts, selected]);
+
+  /**
+   * Deletes the selected document (Proton trash first when storage exists, then Life Manager API).
+   *
+   * ```
+   * User -> DocumentList : Delete
+   * DocumentList -> ConfirmDialog : show
+   * User -> ConfirmDialog : confirm
+   * alt proton storage and not connected
+   *   DocumentList --> User : block (connect Proton)
+   * else proton storage and connected
+   *   DocumentList -> ProtonSDK : trashProtonFile
+   *   DocumentList -> API : DELETE /documents/{id}
+   * else no storage
+   *   DocumentList -> API : DELETE /documents/{id}
+   * end
+   * DocumentList -> DocumentList : close modal + refresh list
+   * ```
+   */
+  const handleDeleteConfirm = async () => {
+    if (!selected || !token || deleting) {
+      if (!token) {
+        Alert.alert('Error', 'No authentication token available.');
+      }
+      return;
+    }
+
+    const doc = selected;
+    const hasProtonStorage =
+      doc.storage?.provider === 'proton_drive' && Boolean(doc.storage.share_id);
+
+    if (hasProtonStorage) {
+      if (!isWeb || !protonSupported) {
+        Alert.alert(
+          'Proton Drive',
+          'Proton-backed documents can only be deleted from the web app with Proton Drive connected.'
+        );
+        return;
+      }
+      if (!protonSession) {
+        Alert.alert('Proton Drive', 'Connect Proton Drive before deleting this document.');
+        return;
+      }
+    }
+
+    setDeleting(true);
+    try {
+      if (hasProtonStorage && doc.storage) {
+        const proton = await import('@/lib/proton-drive/load-proton.web');
+        await proton.trashProtonFile(doc.storage.share_id, doc.storage.node_id);
+      }
+
+      const response = await apiFetch(`/documents/${doc.id}`, {
+        method: 'DELETE',
+        token,
+        onUnauthorized: handleUnauthorized,
+      });
+      if (!response.ok) {
+        const bodyText = await response.text();
+        throw new Error(
+          bodyText
+            ? `Request failed (${response.status}): ${bodyText}`
+            : `Request failed with status ${response.status}`
+        );
+      }
+
+      setDeleteDialogVisible(false);
+      closeModal();
+      onDocumentUpdated?.();
+      await load();
+      Alert.alert('Success', `Deleted document "${doc.title}".`);
+    } catch (err: unknown) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : 'Failed to delete document';
+      Alert.alert('Error', msg);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   /**
    * Saves document edits via one of three API paths:
@@ -799,7 +883,8 @@ export default function DocumentList({
                         disabled={
                           protonDownloading ||
                           !protonSession ||
-                          protonPreviewLoading
+                          protonPreviewLoading ||
+                          deleting
                         }
                         accessibilityLabel="Download document from Proton Drive"
                         style={styles.modalActionButton}
@@ -812,15 +897,26 @@ export default function DocumentList({
                     variant="outline"
                     label="Edit"
                     onPress={startEdit}
+                    disabled={deleting}
                     accessibilityLabel="Edit document"
                     style={styles.modalActionButton}
                     labelStyle={styles.modalActionText}
                   />
                   <View style={styles.modalActionDivider} />
                   <Button
+                    variant="destructive"
+                    label={deleting ? 'Deleting…' : 'Delete'}
+                    onPress={() => setDeleteDialogVisible(true)}
+                    disabled={deleting}
+                    accessibilityLabel="Delete document"
+                    style={styles.modalActionButton}
+                  />
+                  <View style={styles.modalActionDivider} />
+                  <Button
                     variant="outline"
                     label="Close"
                     onPress={closeModal}
+                    disabled={deleting}
                     accessibilityLabel="Close document"
                     style={styles.modalActionButton}
                     labelStyle={styles.modalActionText}
@@ -831,6 +927,24 @@ export default function DocumentList({
           </View>
         </View>
       </Modal>
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete document?"
+        message={
+          isProtonStorage
+            ? `Delete "${selected?.title ?? 'this document'}" from Life Manager and move its file to Proton Drive trash? This cannot be undone in Life Manager.`
+            : `Delete "${selected?.title ?? 'this document'}" from Life Manager? This cannot be undone.`
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        destructive
+        onCancel={() => {
+          if (!deleting) {
+            setDeleteDialogVisible(false);
+          }
+        }}
+        onConfirm={() => void handleDeleteConfirm()}
+      />
     </View>
   );
 }

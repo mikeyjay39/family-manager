@@ -11,6 +11,7 @@ export {
   downloadProtonFile,
   resolveProtonPreview,
   triggerBrowserDownload,
+  trashProtonFile,
 } from './index.web';
 
 export type { ProtonPreviewResult } from './index.web';

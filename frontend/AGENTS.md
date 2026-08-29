@@ -93,7 +93,7 @@ Multi-step UI flows (auth → fetch → render, wizards, tenant resolution, etc.
 | Tenant theme merge | `lib/tenant/theme/merge-theme.ts`, `TenantThemeContext.tsx` |
 | Shared login / signup | `components/auth/login-form.tsx`, `components/auth/signup-form.tsx`, `app/login.tsx`, `app/signup.tsx` |
 | Tenant home screen | `tenants/life-manager/screens/HomeScreen.tsx` |
-| List + tests | `tenants/life-manager/components/document-list.tsx`, `document-list.test.tsx` |
+| List + tests | `tenants/life-manager/components/document-list.tsx`, `document-list.test.tsx` (includes delete + ConfirmDialog) |
 | Proton preview in modal | `tenants/life-manager/components/document-proton-preview.tsx` (web; SDK thumb then download fallback) |
 | Form + tests | `tenants/life-manager/components/document-create-form.tsx`, `document-create-form.test.tsx` |
 | API client | `lib/api/client.ts` |

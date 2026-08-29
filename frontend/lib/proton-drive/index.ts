@@ -40,3 +40,7 @@ export async function resolveProtonPreview(): Promise<never> {
 export async function triggerBrowserDownload(): Promise<never> {
   throw new Error('Proton Drive is only available on web.');
 }
+
+export async function trashProtonFile(): Promise<never> {
+  throw new Error('Proton Drive is only available on web.');
+}

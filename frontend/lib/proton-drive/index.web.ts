@@ -105,3 +105,8 @@ export async function triggerBrowserDownload(blob: Blob, filename: string): Prom
   const { triggerBrowserDownload: trigger } = await import('./drive-client.web');
   trigger(blob, filename);
 }
+
+export async function trashProtonFile(shareId: string, nodeId: string): Promise<void> {
+  const { trashProtonFile: trash } = await import('./drive-client.web');
+  return trash(shareId, nodeId);
+}

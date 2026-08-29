@@ -10,7 +10,7 @@ use crate::schema::documents;
 use crate::{
     domain::document::Document,
     infrastructure::document::document_entity::{
-        storage_columns_from_ref, DocumentEntity, NewDocumentEntity, UpdateDocumentEntity,
+        DocumentEntity, NewDocumentEntity, UpdateDocumentEntity, storage_columns_from_ref,
     },
 };
 use async_trait::async_trait;
@@ -41,16 +41,18 @@ impl DocumentRepository for DocumentOrmCollection {
 
         let id_str = id.to_string();
         let result = conn
-            .interact(move |conn| -> QueryResult<(DocumentEntity, HashMap<String, Vec<String>>)> {
-                let entity = documents::table
-                    .filter(documents::id.eq(id_str))
-                    .select(DocumentEntity::as_select())
-                    .get_result(conn)?;
+            .interact(
+                move |conn| -> QueryResult<(DocumentEntity, HashMap<String, Vec<String>>)> {
+                    let entity = documents::table
+                        .filter(documents::id.eq(id_str))
+                        .select(DocumentEntity::as_select())
+                        .get_result(conn)?;
 
-                let tags_by_document_id =
-                    load_tags_by_document_ids(conn, std::slice::from_ref(&entity.id))?;
-                Ok((entity, tags_by_document_id))
-            })
+                    let tags_by_document_id =
+                        load_tags_by_document_ids(conn, std::slice::from_ref(&entity.id))?;
+                    Ok((entity, tags_by_document_id))
+                },
+            )
             .await;
 
         match result {
@@ -101,16 +103,16 @@ impl DocumentRepository for DocumentOrmCollection {
         let result = conn
             .interact(
                 move |conn| -> QueryResult<(Vec<DocumentEntity>, HashMap<String, Vec<String>>)> {
-                let entities = documents::table
-                    .filter(documents::user_id.eq(user_id_str))
-                    .limit(limit)
-                    .select(DocumentEntity::as_select())
-                    .get_results(conn)?;
+                    let entities = documents::table
+                        .filter(documents::user_id.eq(user_id_str))
+                        .limit(limit)
+                        .select(DocumentEntity::as_select())
+                        .get_results(conn)?;
 
-                let document_ids: Vec<String> = entities.iter().map(|e| e.id.clone()).collect();
-                let tags_by_document_id = load_tags_by_document_ids(conn, &document_ids)?;
-                Ok((entities, tags_by_document_id))
-            },
+                    let document_ids: Vec<String> = entities.iter().map(|e| e.id.clone()).collect();
+                    let tags_by_document_id = load_tags_by_document_ids(conn, &document_ids)?;
+                    Ok((entities, tags_by_document_id))
+                },
             )
             .await;
 
@@ -121,10 +123,7 @@ impl DocumentRepository for DocumentOrmCollection {
                     .filter_map(|e| {
                         let doc_id = Uuid::parse_str(&e.id).ok()?;
                         let user_id = Uuid::parse_str(&e.user_id).ok()?;
-                        let tags = tags_by_document_id
-                            .get(&e.id)
-                            .cloned()
-                            .unwrap_or_default();
+                        let tags = tags_by_document_id.get(&e.id).cloned().unwrap_or_default();
                         Some(Document::with_id(
                             doc_id,
                             &e.title,
@@ -171,18 +170,18 @@ impl DocumentRepository for DocumentOrmCollection {
         let result = conn
             .interact(
                 move |conn| -> QueryResult<(Vec<DocumentEntity>, HashMap<String, Vec<String>>)> {
-                let entities = documents::table
-                    .filter(documents::user_id.eq(user_id_str))
-                    .filter(documents::title.gt(title))
-                    .order_by(documents::title.asc())
-                    .limit(limit)
-                    .select(DocumentEntity::as_select())
-                    .get_results(conn)?;
+                    let entities = documents::table
+                        .filter(documents::user_id.eq(user_id_str))
+                        .filter(documents::title.gt(title))
+                        .order_by(documents::title.asc())
+                        .limit(limit)
+                        .select(DocumentEntity::as_select())
+                        .get_results(conn)?;
 
-                let document_ids: Vec<String> = entities.iter().map(|e| e.id.clone()).collect();
-                let tags_by_document_id = load_tags_by_document_ids(conn, &document_ids)?;
-                Ok((entities, tags_by_document_id))
-            },
+                    let document_ids: Vec<String> = entities.iter().map(|e| e.id.clone()).collect();
+                    let tags_by_document_id = load_tags_by_document_ids(conn, &document_ids)?;
+                    Ok((entities, tags_by_document_id))
+                },
             )
             .await;
 
@@ -193,10 +192,7 @@ impl DocumentRepository for DocumentOrmCollection {
                     .filter_map(|e| {
                         let doc_id = Uuid::parse_str(&e.id).ok()?;
                         let user_id = Uuid::parse_str(&e.user_id).ok()?;
-                        let tags = tags_by_document_id
-                            .get(&e.id)
-                            .cloned()
-                            .unwrap_or_default();
+                        let tags = tags_by_document_id.get(&e.id).cloned().unwrap_or_default();
                         Some(Document::with_id(
                             doc_id,
                             &e.title,
@@ -326,12 +322,11 @@ impl DocumentRepository for DocumentOrmCollection {
         let result = conn
             .interact(move |conn| -> QueryResult<DocumentEntity> {
                 conn.transaction(|conn| {
-                    let updated_doc = diesel::update(
-                        documents::table.filter(documents::id.eq(&doc_id_str)),
-                    )
-                    .set(&update_entity)
-                    .returning(DocumentEntity::as_returning())
-                    .get_result::<DocumentEntity>(conn)?;
+                    let updated_doc =
+                        diesel::update(documents::table.filter(documents::id.eq(&doc_id_str)))
+                            .set(&update_entity)
+                            .returning(DocumentEntity::as_returning())
+                            .get_result::<DocumentEntity>(conn)?;
                     replace_document_tags(conn, &updated_doc.id, &tag_names)?;
                     Ok(updated_doc)
                 })
@@ -361,6 +356,47 @@ impl DocumentRepository for DocumentOrmCollection {
             },
             Err(e) => {
                 tracing::error!("Error updating document: {}", e);
+                Err(Box::new(e))
+            }
+        }
+    }
+
+    async fn load_owned_document(&self, id: Uuid, user_id: Uuid) -> Option<Document> {
+        let document = self.get_document(id).await?;
+        if document.user_id == user_id {
+            Some(document)
+        } else {
+            tracing::warn!(
+                "Document {} is not owned by user {}. Access denied.",
+                id,
+                user_id
+            );
+            None
+        }
+    }
+
+    async fn delete_document(&self, id: Uuid) -> Result<bool, Box<dyn std::error::Error>> {
+        tracing::info!("Deleting document with ID: {}", id);
+        let conn = self.pool.get().await?;
+        let id_str = id.to_string();
+
+        let result = conn
+            .interact(move |conn| -> QueryResult<usize> {
+                diesel::delete(documents::table.filter(documents::id.eq(id_str))).execute(conn)
+            })
+            .await;
+
+        match result {
+            Ok(Ok(rows)) => {
+                tracing::info!("Document delete affected {} row(s) for ID: {}", rows, id);
+                Ok(rows > 0)
+            }
+            Ok(Err(e)) => {
+                tracing::error!("Error deleting document: {}", e);
+                Err(Box::new(e))
+            }
+            Err(e) => {
+                tracing::error!("Error deleting document: {}", e);
                 Err(Box::new(e))
             }
         }

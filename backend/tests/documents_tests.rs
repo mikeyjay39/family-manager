@@ -830,6 +830,136 @@ async fn given_other_users_document_when_getting_then_returns_not_found() {
     .await;
 }
 
+#[tokio::test]
+#[serial]
+#[traced_test]
+async fn given_owned_document_when_deleting_then_returns_no_content_and_gone() {
+    run_test_with_test_profile(|server: TestServer| async move {
+        let auth_header = build_auth_header(&server).await;
+
+        let create_payload = CreateDocumentCommand {
+            title: String::from("Delete Me"),
+            content: String::from("Temporary content."),
+            tags: vec!["temp".to_string()],
+            issued_date: None,
+            expire_date: None,
+            storage: None,
+        };
+        let json_string = serde_json::to_string(&create_payload).unwrap();
+        let multipart_body = format!(
+            "--boundary\r\n\
+        Content-Disposition: form-data; name=\"json\"\r\n\
+        Content-Type: application/json\r\n\r\n\
+        {}\r\n\
+        --boundary--",
+            json_string
+        );
+
+        let url = server
+            .server_url(DOCUMENTS_URL)
+            .expect("Failed to get server URL")
+            .to_string();
+
+        let res = reqwest::Client::new()
+            .post(&url)
+            .body(multipart_body)
+            .header("Content-Type", "multipart/form-data; boundary=boundary")
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert!(res.status().is_success());
+        let created = res.json::<DocumentDto>().await.unwrap();
+
+        let delete_url = server
+            .server_url(&format!("{}/{}", DOCUMENTS_URL, created.id))
+            .expect("Failed to get server URL")
+            .to_string();
+        let delete_res = reqwest::Client::new()
+            .delete(&delete_url)
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send delete request");
+        assert_eq!(delete_res.status(), StatusCode::NO_CONTENT);
+
+        let get_res = reqwest::Client::new()
+            .get(&delete_url)
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send get request");
+        assert_eq!(get_res.status(), StatusCode::NOT_FOUND);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+#[traced_test]
+async fn given_other_users_document_when_deleting_then_returns_not_found() {
+    run_test_with_test_profile(|server: TestServer| async move {
+        let auth_header = build_auth_header(&server).await;
+
+        let create_payload = CreateDocumentCommand {
+            title: String::from("Owned Document"),
+            content: String::from("Private content."),
+            tags: vec![],
+            issued_date: None,
+            expire_date: None,
+            storage: None,
+        };
+        let json_string = serde_json::to_string(&create_payload).unwrap();
+        let multipart_body = format!(
+            "--boundary\r\n\
+        Content-Disposition: form-data; name=\"json\"\r\n\
+        Content-Type: application/json\r\n\r\n\
+        {}\r\n\
+        --boundary--",
+            json_string
+        );
+
+        let url = server
+            .server_url(DOCUMENTS_URL)
+            .expect("Failed to get server URL")
+            .to_string();
+
+        let res = reqwest::Client::new()
+            .post(&url)
+            .body(multipart_body)
+            .header("Content-Type", "multipart/form-data; boundary=boundary")
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send request");
+        assert!(res.status().is_success());
+        let created = res.json::<DocumentDto>().await.unwrap();
+
+        let other_user_header =
+            build_bearer_token_with_tenant(uuid::Uuid::new_v4(), "life-manager");
+        let delete_url = server
+            .server_url(&format!("{}/{}", DOCUMENTS_URL, created.id))
+            .expect("Failed to get server URL")
+            .to_string();
+        let delete_res = reqwest::Client::new()
+            .delete(&delete_url)
+            .header("Authorization", other_user_header)
+            .send()
+            .await
+            .expect("Failed to send delete request");
+        assert_eq!(delete_res.status(), StatusCode::NOT_FOUND);
+
+        let get_res = reqwest::Client::new()
+            .get(&delete_url)
+            .header("Authorization", &auth_header)
+            .send()
+            .await
+            .expect("Failed to send get request");
+        assert_eq!(get_res.status(), StatusCode::OK);
+    })
+    .await;
+}
+
 async fn assert_validation_error_response(res: reqwest::Response) {
     assert_eq!(
         res.status(),

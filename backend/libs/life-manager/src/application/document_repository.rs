@@ -24,4 +24,7 @@ pub trait DocumentRepository: Sync + Send {
         &self,
         document: Document,
     ) -> Result<Document, Box<dyn std::error::Error>>;
+    /// Deletes the document by id. Returns `true` if a row was removed.
+    async fn delete_document(&self, id: Uuid) -> Result<bool, Box<dyn std::error::Error>>;
+    async fn load_owned_document(&self, id: Uuid, user_id: Uuid) -> Option<Document>;
 }

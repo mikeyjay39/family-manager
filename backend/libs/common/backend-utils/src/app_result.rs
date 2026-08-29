@@ -60,9 +60,22 @@ impl<T: Serialize> AppResponse<T> {
     }
 }
 
+impl AppResponse<()> {
+    pub fn no_content() -> AppResult<Self> {
+        Ok(Self {
+            status: StatusCode::NO_CONTENT,
+            data: (),
+        })
+    }
+}
+
 impl<T: Serialize> IntoResponse for AppResponse<T> {
     fn into_response(self) -> Response {
-        (self.status, Json(self.data)).into_response()
+        if self.status == StatusCode::NO_CONTENT {
+            self.status.into_response()
+        } else {
+            (self.status, Json(self.data)).into_response()
+        }
     }
 }
 
@@ -109,6 +122,29 @@ mod tests {
         let response = AppResponse::created(dto.clone()).expect("created should succeed");
         assert_eq!(response.status, StatusCode::CREATED);
         assert_eq!(response.data, dto);
+    }
+
+    #[test]
+    fn given_no_content_when_called_then_sets_204_with_unit() {
+        let response = AppResponse::<()>::no_content().expect("no_content should succeed");
+        assert_eq!(response.status, StatusCode::NO_CONTENT);
+        assert_eq!(response.data, ());
+    }
+
+    #[tokio::test]
+    async fn given_no_content_when_into_response_then_has_empty_body() {
+        let response = AppResponse {
+            status: StatusCode::NO_CONTENT,
+            data: (),
+        }
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        let body = response.into_body();
+        let bytes = to_bytes(body, usize::MAX)
+            .await
+            .expect("failed to read response body");
+        assert!(bytes.is_empty());
     }
 
     #[test]

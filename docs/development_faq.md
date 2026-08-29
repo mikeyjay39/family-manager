@@ -152,6 +152,7 @@ life-manager can upload document files **directly to Proton Drive** from the **E
 - **Connect:** Home screen → **Proton Drive (experimental)** panel. You log in to Proton in the browser; credentials stay client-side only (never sent to the life-manager backend).
 - **Upload flow:** Connect Proton → create a document with title/content → attach a file → submit. The file is encrypted and uploaded via `@protontech/drive-sdk`; metadata (Proton node IDs) is saved via `POST /life-manager/api/v1/documents/json`.
 - **Preview / download:** Open a Proton-backed document in the list modal (web). Preview tries an SDK thumbnail first; if none exists, it downloads and decrypts the file in the browser (images/PDF inline; other types show a file card). **Download** saves the decrypted file via the same Drive SDK path. There is **no** life-manager backend download endpoint — bytes stay client ↔ Proton.
+- **Delete:** Document modal → **Delete** → confirm. If the document has a Proton `storage` ref, trash the Drive file first (requires Proton connected on web), then `DELETE /life-manager/api/v1/documents/{id}`. Documents without storage are DB-only deletes. See [delete workflow](#delete-workflow).
 - **OCR:** Skipped for Proton-backed uploads in v1 — enter title and content manually.
 - **Dependencies:** `@protontech/drive-sdk`, `@protontech/crypto` (see `frontend/lib/proton-drive/`).
 - **Status:** Proton’s SDK is preview-only; a breaking crypto migration is expected late 2026 / early 2027. Personal/non-commercial use only per Proton’s SDK terms.
@@ -245,6 +246,42 @@ sequenceDiagram
   User->>Modal: Download
   Modal->>ProtonLib: downloadProtonFile if needed then triggerBrowserDownload
   ProtonLib-->>User: browser save as filename
+```
+
+### Delete workflow
+
+Deleting a document is owner-only (same as get/update). Life Manager hard-deletes the SQLite row (`document_tags` cascade). Proton file removal is client-side only.
+
+- **With Proton `storage`:** Confirm → require Proton session (web) → `trashNodes` (Drive trash; missing/already-trashed counts as success) → `DELETE .../documents/{id}` (204). If Proton trash fails for another reason, the Life Manager row is left intact.
+- **Without storage:** Confirm → `DELETE` only (works on native).
+- **Blocked:** Proton-backed delete when Proton is not connected, or on native (use web + Proton).
+
+#### Sequence (web, Proton-backed document)
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Modal as DocumentListModal
+  participant Confirm as ConfirmDialog
+  participant ProtonLib as proton-drive
+  participant SDK as ProtonDriveSDK
+  participant API as life-manager API
+  participant DB as SQLite
+
+  User->>Modal: Delete
+  Modal->>Confirm: show confirm
+  User->>Confirm: confirm
+  alt not connected
+    Modal-->>User: block connect Proton first
+  else connected
+    Modal->>ProtonLib: trashProtonFile shareId nodeId
+    ProtonLib->>SDK: trashNodes
+    Note over ProtonLib: missing or already trashed equals success
+    Modal->>API: DELETE /documents/id
+    API->>DB: delete owned row
+    API-->>Modal: 204
+    Modal-->>User: close modal refresh list
+  end
 ```
 
 ### TLS in production

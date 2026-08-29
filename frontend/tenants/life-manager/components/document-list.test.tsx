@@ -39,6 +39,7 @@ vi.mock('@/lib/proton-drive/load-proton.web', () => ({
   downloadProtonFile: vi.fn(),
   triggerBrowserDownload: vi.fn(),
   uploadToLifeManagerFolder: vi.fn(),
+  trashProtonFile: vi.fn(),
 }));
 
 const mockUseAuth = vi.mocked(useAuth);
@@ -48,6 +49,7 @@ const mockApiFetch = vi.mocked(apiFetch);
 const mockResolveProtonPreview = vi.mocked(loadProton.resolveProtonPreview);
 const mockDownloadProtonFile = vi.mocked(loadProton.downloadProtonFile);
 const mockTriggerBrowserDownload = vi.mocked(loadProton.triggerBrowserDownload);
+const mockTrashProtonFile = vi.mocked(loadProton.trashProtonFile);
 
 const protonDoc = {
   id: 'doc-proton',
@@ -718,5 +720,158 @@ describe('DocumentList Proton preview and download', () => {
     expect(screen.queryByLabelText('Download document from Proton Drive')).toBeNull();
     expect(screen.queryByTestId('proton-preview')).toBeNull();
     expect(mockResolveProtonPreview).not.toHaveBeenCalled();
+  });
+
+  it('given open modal when delete is pressed then shows confirmation dialog', async () => {
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { id: 'doc-1', title: 'Doc A', content: 'Body', created_at: '2026-07-11T00:00:00' },
+        ]),
+        { status: 200 }
+      )
+    );
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Doc A')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Doc A'));
+    fireEvent.press(screen.getByLabelText('Delete document'));
+
+    expect(screen.getByText('Delete document?')).toBeTruthy();
+    expect(
+      screen.getByText(/Delete "Doc A" from Life Manager\? This cannot be undone\./)
+    ).toBeTruthy();
+  });
+
+  it('given delete confirmation when cancel is pressed then does not call delete API', async () => {
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { id: 'doc-1', title: 'Doc A', content: 'Body', created_at: '2026-07-11T00:00:00' },
+        ]),
+        { status: 200 }
+      )
+    );
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Doc A')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Doc A'));
+    fireEvent.press(screen.getByLabelText('Delete document'));
+    fireEvent.press(screen.getByLabelText('Cancel'));
+
+    expect(mockApiFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/documents/'),
+      expect.objectContaining({ method: 'DELETE' })
+    );
+    expect(mockTrashProtonFile).not.toHaveBeenCalled();
+  });
+
+  it('given document without storage when delete is confirmed then deletes via API and refreshes', async () => {
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            { id: 'doc-1', title: 'Doc A', content: 'Body', created_at: '2026-07-11T00:00:00' },
+          ]),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+    mockApiFetch.mockResolvedValue(new Response(null, { status: 204 }));
+
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Doc A')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Doc A'));
+    fireEvent.press(screen.getByLabelText('Delete document'));
+    fireEvent.press(screen.getByLabelText('Delete'));
+
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalledWith(
+        '/documents/doc-1',
+        expect.objectContaining({ method: 'DELETE', token: 'tok' })
+      );
+    });
+    expect(mockTrashProtonFile).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith('Success', 'Deleted document "Doc A".');
+  });
+
+  it('given proton storage and no session when delete is confirmed then blocks and does not call API', async () => {
+    mockWebPlatform();
+    mockUseProtonConnect.mockReturnValue({
+      session: null,
+      isSupported: true,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      isConnecting: false,
+    });
+    mockAuthenticatedFetch.mockResolvedValue(
+      new Response(JSON.stringify([protonDoc]), { status: 200 })
+    );
+
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Proton Doc')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Proton Doc'));
+    fireEvent.press(screen.getByLabelText('Delete document'));
+    expect(screen.getByText(/Proton Drive trash/)).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Delete'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Proton Drive',
+        'Connect Proton Drive before deleting this document.'
+      );
+    });
+    expect(mockTrashProtonFile).not.toHaveBeenCalled();
+    expect(mockApiFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/documents/'),
+      expect.objectContaining({ method: 'DELETE' })
+    );
+  });
+
+  it('given proton storage and session when delete is confirmed then trashes then deletes', async () => {
+    mockWebPlatform();
+    mockUseProtonConnect.mockReturnValue({
+      session: { email: 'user@proton.me' },
+      isSupported: true,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      isConnecting: false,
+    });
+    mockResolveProtonPreview.mockResolvedValue({
+      kind: 'file',
+      blob: new Blob(['x']),
+      filename: 'scan.png',
+      mimeType: 'image/png',
+    });
+    mockTrashProtonFile.mockResolvedValue(undefined);
+    mockAuthenticatedFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify([protonDoc]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+    mockApiFetch.mockResolvedValue(new Response(null, { status: 204 }));
+
+    renderDocumentList();
+    await waitFor(() => {
+      expect(screen.getByText('Proton Doc')).toBeTruthy();
+    });
+    fireEvent.press(screen.getByLabelText('Open document Proton Doc'));
+    await waitFor(() => {
+      expect(mockResolveProtonPreview).toHaveBeenCalled();
+    });
+    fireEvent.press(screen.getByLabelText('Delete document'));
+    fireEvent.press(screen.getByLabelText('Delete'));
+
+    await waitFor(() => {
+      expect(mockTrashProtonFile).toHaveBeenCalledWith('share-1', 'node-1');
+    });
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      '/documents/doc-proton',
+      expect.objectContaining({ method: 'DELETE', token: 'tok' })
+    );
   });
 });
