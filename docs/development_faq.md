@@ -151,6 +151,7 @@ life-manager can upload document files **directly to Proton Drive** from the **E
 
 - **Connect:** Home screen → **Proton Drive (experimental)** panel. You log in to Proton in the browser; credentials stay client-side only (never sent to the life-manager backend).
 - **Upload flow:** Connect Proton → create a document with title/content → attach a file → submit. The file is encrypted and uploaded via `@protontech/drive-sdk`; metadata (Proton node IDs) is saved via `POST /life-manager/api/v1/documents/json`.
+- **Preview / download:** Open a Proton-backed document in the list modal (web). Preview tries an SDK thumbnail first; if none exists, it downloads and decrypts the file in the browser (images/PDF inline; other types show a file card). **Download** saves the decrypted file via the same Drive SDK path. There is **no** life-manager backend download endpoint — bytes stay client ↔ Proton.
 - **OCR:** Skipped for Proton-backed uploads in v1 — enter title and content manually.
 - **Dependencies:** `@protontech/drive-sdk`, `@protontech/crypto` (see `frontend/lib/proton-drive/`).
 - **Status:** Proton’s SDK is preview-only; a breaking crypto migration is expected late 2026 / early 2027. Personal/non-commercial use only per Proton’s SDK terms.
@@ -211,6 +212,39 @@ flowchart TB
   Meta -->|"no file bytes"| API --> DB
   Native["Native iOS/Android"] --> Multipart["POST /documents\nmultipart file to backend"]
   Multipart --> API
+```
+
+### Preview and download workflow
+
+Opening a Proton-backed document in the list modal (web, Proton session required) loads a preview and offers Download. File bytes never hit the life-manager API.
+
+If Proton’s SDK reports a post-download **signature/manifest verification** issue (`IntegrityError` with `isDownloadCompleteWithSignatureIssues()`), life-manager still uses the decrypted bytes for preview/download and logs a console warning. Block decryption already succeeded in that case; the SDK documents this as a client-handled path.
+
+#### Sequence (web, Proton connected)
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Modal as DocumentListModal
+  participant ProtonLib as proton-drive
+  participant SDK as ProtonDriveSDK
+  participant DriveAPI as drive-api.proton.me
+
+  User->>Modal: Open document with storage ref
+  Modal->>ProtonLib: resolveProtonPreview(shareId, nodeId)
+  ProtonLib->>SDK: iterateThumbnails
+  alt thumbnail available
+    SDK-->>ProtonLib: thumbnail bytes
+    ProtonLib-->>Modal: image preview
+  else no thumbnail
+    ProtonLib->>SDK: getFileDownloader + downloadToStream
+    SDK->>DriveAPI: encrypted blocks
+    SDK-->>ProtonLib: decrypted file
+    ProtonLib-->>Modal: image or PDF preview or file card
+  end
+  User->>Modal: Download
+  Modal->>ProtonLib: downloadProtonFile if needed then triggerBrowserDownload
+  ProtonLib-->>User: browser save as filename
 ```
 
 ### TLS in production

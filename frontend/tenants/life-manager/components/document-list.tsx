@@ -19,7 +19,9 @@ import { useProtonConnect } from '@/contexts/ProtonConnectContext';
 import { apiFetch, authenticatedFetch } from '@/lib/api/client';
 import type { DocumentDto, UpdateDocumentCommand } from '@/lib/api/types';
 import { useColorPalette } from '@/lib/tenant/TenantThemeContext';
+import type { ProtonPreviewResult } from '@/lib/proton-drive/types';
 import DocumentGrid, { DOCUMENT_GRID_WIDTH } from './document-grid';
+import DocumentProtonPreview from './document-proton-preview';
 import {
   formatIsoDateForInput,
   parseOptionalDateInput,
@@ -102,6 +104,15 @@ export default function DocumentList({
   const [editIssuedDateInput, setEditIssuedDateInput] = useState('');
   const [editExpireDateInput, setEditExpireDateInput] = useState('');
   const [pickedFile, setPickedFile] = useState<DocumentPickerAsset | null>(null);
+  const [protonPreview, setProtonPreview] = useState<ProtonPreviewResult | null>(null);
+  const [protonPreviewLoading, setProtonPreviewLoading] = useState(false);
+  const [protonPreviewError, setProtonPreviewError] = useState<string | null>(null);
+  const [protonDownloading, setProtonDownloading] = useState(false);
+  /** Full-file blob when preview already downloaded the file (not a thumbnail-only image). */
+  const [cachedFullFileBlob, setCachedFullFileBlob] = useState<Blob | null>(null);
+
+  const isProtonStorage =
+    selected?.storage?.provider === 'proton_drive' && Boolean(selected.storage.share_id);
 
   const styles = useMemo(
     () =>
@@ -196,11 +207,6 @@ export default function DocumentList({
         },
         metaLabel: {
           fontWeight: '600',
-        },
-        storageHint: {
-          fontSize: 14,
-          color: palette.icon,
-          marginBottom: 12,
         },
         label: {
           fontSize: 16,
@@ -298,7 +304,112 @@ export default function DocumentList({
     setIsEditing(false);
     setSaving(false);
     setPickedFile(null);
+    setProtonPreview(null);
+    setProtonPreviewLoading(false);
+    setProtonPreviewError(null);
+    setProtonDownloading(false);
+    setCachedFullFileBlob(null);
   }, []);
+
+  useEffect(() => {
+    if (!selected || isEditing || !isProtonStorage || !selected.storage) {
+      return;
+    }
+    if (!isWeb || !protonSupported) {
+      return;
+    }
+    if (!protonSession) {
+      setProtonPreview(null);
+      setProtonPreviewError(null);
+      setProtonPreviewLoading(false);
+      setCachedFullFileBlob(null);
+      return;
+    }
+
+    let cancelled = false;
+    const storage = selected.storage;
+    setProtonPreviewLoading(true);
+    setProtonPreviewError(null);
+    setProtonPreview(null);
+    setCachedFullFileBlob(null);
+
+    void (async () => {
+      try {
+        const proton = await import('@/lib/proton-drive/load-proton.web');
+        const result = await proton.resolveProtonPreview(
+          storage.share_id,
+          storage.node_id,
+          storage.mime_type,
+          storage.filename
+        );
+        if (cancelled) {
+          return;
+        }
+        setProtonPreview(result);
+        if (result.kind === 'image' && result.source === 'thumbnail') {
+          setCachedFullFileBlob(null);
+        } else {
+          setCachedFullFileBlob(result.blob);
+        }
+      } catch (err: unknown) {
+        if (cancelled) {
+          return;
+        }
+        console.error(err);
+        setProtonPreviewError(
+          err instanceof Error ? err.message : 'Failed to load Proton Drive preview'
+        );
+        setProtonPreview(null);
+        setCachedFullFileBlob(null);
+      } finally {
+        if (!cancelled) {
+          setProtonPreviewLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selected,
+    isEditing,
+    isProtonStorage,
+    isWeb,
+    protonSupported,
+    protonSession,
+  ]);
+
+  const handleProtonDownload = useCallback(async () => {
+    if (!selected?.storage || selected.storage.provider !== 'proton_drive') {
+      return;
+    }
+    if (!protonSession) {
+      Alert.alert('Proton Drive', 'Connect Proton Drive before downloading.');
+      return;
+    }
+    setProtonDownloading(true);
+    try {
+      const proton = await import('@/lib/proton-drive/load-proton.web');
+      const storage = selected.storage;
+      let blob = cachedFullFileBlob;
+      if (!blob) {
+        blob = await proton.downloadProtonFile(
+          storage.share_id,
+          storage.node_id,
+          storage.mime_type
+        );
+        setCachedFullFileBlob(blob);
+      }
+      await proton.triggerBrowserDownload(blob, storage.filename);
+    } catch (err: unknown) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : 'Failed to download file';
+      Alert.alert('Error', msg);
+    } finally {
+      setProtonDownloading(false);
+    }
+  }, [selected, protonSession, cachedFullFileBlob]);
 
   const populateEditDrafts = useCallback((doc: DocumentDto) => {
     setEditTitle(doc.title);
@@ -641,9 +752,14 @@ export default function DocumentList({
                     {formatDisplayDate(selected?.expire_date)}
                   </Text>
                   {selected?.storage?.provider === 'proton_drive' ? (
-                    <Text style={styles.storageHint}>
-                      Stored in Proton Drive: {selected.storage.filename}
-                    </Text>
+                    <DocumentProtonPreview
+                      storage={selected.storage}
+                      hasSession={Boolean(protonSession)}
+                      protonSupported={protonSupported}
+                      preview={protonPreview}
+                      loading={protonPreviewLoading}
+                      error={protonPreviewError}
+                    />
                   ) : null}
                   <Text style={styles.modalContent}>{selected?.content ?? ''}</Text>
                 </>
@@ -674,6 +790,24 @@ export default function DocumentList({
                 </>
               ) : (
                 <>
+                  {isProtonStorage && isWeb && protonSupported ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        label={protonDownloading ? 'Downloading…' : 'Download'}
+                        onPress={() => void handleProtonDownload()}
+                        disabled={
+                          protonDownloading ||
+                          !protonSession ||
+                          protonPreviewLoading
+                        }
+                        accessibilityLabel="Download document from Proton Drive"
+                        style={styles.modalActionButton}
+                        labelStyle={styles.modalActionText}
+                      />
+                      <View style={styles.modalActionDivider} />
+                    </>
+                  ) : null}
                   <Button
                     variant="outline"
                     label="Edit"

@@ -44,16 +44,17 @@ function renderDocumentCreateForm(props: { onDocumentCreated?: () => void } = {}
   );
 }
 
-function defaultAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
+function defaultAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}): ReturnType<typeof useAuth> {
   return {
     token: 'test-token',
     handleUnauthorized: vi.fn(),
     isAuthenticated: true,
     isLoading: false,
     login: vi.fn(),
+    signup: vi.fn(),
     logout: vi.fn(),
     ...overrides,
-  };
+  } as ReturnType<typeof useAuth>;
 }
 
 function openCreateModal() {

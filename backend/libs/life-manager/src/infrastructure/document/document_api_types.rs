@@ -29,7 +29,7 @@ impl DocumentStorageRefDto {
         }
     }
 
-    pub fn into_domain(mut self) -> Result<DocumentStorageRef, AppError> {
+    pub fn into_domain(self) -> Result<DocumentStorageRef, AppError> {
         DocumentStorageRef::new(
             self.provider,
             self.share_id,
