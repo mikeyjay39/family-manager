@@ -227,35 +227,30 @@ pub async fn update_document_json(
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Updating document from JSON with ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
-    let mut document = match repo.load_owned_document(&id, &user_id).await {
-        Some(doc) => doc,
-        None => return AppResponse::not_found(),
-    };
-
-    document.apply_metadata_update(
-        &payload.title,
-        &payload.content,
-        normalize_tag_names(&payload.tags),
-        payload.issued_date,
-        payload.expire_date,
+    let update_document_command = UpdateDocumentCommand::new(
+        id,
+        UploadedDocumentInput::new(
+            payload.title.clone(),
+            None,
+            Vec::new(),
+            user_id,
+            payload.tags.clone(),
+            Some(payload.content.clone()),
+            payload.issued_date,
+            payload.expire_date,
+            match payload.storage {
+                Some(storage) => Some(storage.into_domain()?),
+                None => None,
+            },
+        ),
+        repo,
+        document_use_cases.reader.clone(),
+        document_use_cases.summarizer.clone(),
     );
 
-    if let Some(storage) = payload.storage {
-        document.storage = Some(storage.into_domain()?);
-    }
-
-    document.print_details();
-
-    match repo.update_document(document).await {
-        Err(e) => {
-            tracing::error!("Error updating document: {}", e);
-            AppResponse::internal_error(e)
-        }
-        Ok(saved_doc) => {
-            tracing::info!("Document updated from JSON: {:?}", saved_doc.title);
-            AppResponse::ok(DocumentDto::from_document(&saved_doc))
-        }
-    }
+    AppResponse::ok(DocumentDto::from_document(
+        &UpdateDocumentCommand::execute(&update_document_command).await?,
+    ))
 }
 
 /// Updates an existing document by processing multipart form data (optional file re-upload with OCR).
@@ -280,7 +275,7 @@ pub async fn update_document(
         json_data,
         file_data,
         file_name,
-    } = parsed_document_multipart::<UpdateDocumentCommandDto>(multipart).await;
+    } = parse_document_multipart::<UpdateDocumentCommandDto>(multipart).await;
 
     if let Some(payload) = json_data {
         let uploaded_document_input = UploadedDocumentInput::new(
@@ -296,6 +291,10 @@ pub async fn update_document(
             Some(payload.content.clone()),
             payload.issued_date,
             payload.expire_date,
+            match payload.storage {
+                Some(storage) => Some(storage.into_domain()?),
+                None => None,
+            },
         );
 
         let document = UpdateDocumentCommand::new(
@@ -315,7 +314,7 @@ pub async fn update_document(
     }
 }
 
-async fn parsed_document_multipart<T: DeserializeOwned>(
+async fn parse_document_multipart<T: DeserializeOwned>(
     mut multipart: Multipart,
 ) -> ParsedUpdateDocumentMultipart<T> {
     let mut json_data: Option<T> = None;
@@ -386,18 +385,6 @@ pub async fn get_documents_by_title(
     let document_dtos: Vec<DocumentDto> =
         documents.iter().map(DocumentDto::from_document).collect();
     AppResponse::ok(document_dtos)
-}
-
-/*
-* TODO: Remove this. It is for testing only
-* */
-pub async fn upload(mut multipart: Multipart) {
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
-
-        tracing::info!("Length of `{}` is {} bytes", name, data.len());
-    }
 }
 
 #[cfg(test)]

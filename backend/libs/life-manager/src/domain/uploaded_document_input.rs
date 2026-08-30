@@ -1,6 +1,8 @@
 use chrono::NaiveDateTime;
 use uuid::Uuid;
 
+use crate::domain::document_storage_ref::DocumentStorageRef;
+
 #[derive(Clone, Debug)]
 /**
 * Structure representing an uploaded document input.
@@ -17,6 +19,7 @@ pub struct UploadedDocumentInput {
     pub tags: Vec<String>,
     pub issued_date: Option<NaiveDateTime>,
     pub expire_date: Option<NaiveDateTime>,
+    pub storage: Option<DocumentStorageRef>,
 }
 
 impl UploadedDocumentInput {
@@ -42,6 +45,7 @@ impl UploadedDocumentInput {
         content: Option<String>,
         issued_date: Option<NaiveDateTime>,
         expire_date: Option<NaiveDateTime>,
+        storage: Option<DocumentStorageRef>,
     ) -> Self {
         let extension = match &file_name {
             Some(name) => name.split('.').last().map(|s| s.to_string()),
@@ -57,6 +61,7 @@ impl UploadedDocumentInput {
             content,
             issued_date,
             expire_date,
+            storage,
         }
     }
 
