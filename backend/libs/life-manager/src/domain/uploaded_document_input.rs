@@ -7,10 +7,10 @@ use uuid::Uuid;
 */
 pub struct UploadedDocumentInput {
     /** Name of the uploaded file. */
-    pub file_name: String,
+    pub file_name: Option<String>,
     /** Raw binary data of the uploaded file. */
     pub file_data: Vec<u8>,
-    pub extension: String,
+    pub extension: Option<String>,
     pub user_id: Uuid,
     pub title: String,
     pub content: Option<String>,
@@ -33,18 +33,38 @@ impl UploadedDocumentInput {
      *
      * A new instance of `UploadedDocumentInput`.
      */
-    pub fn new(file_name: String, file_data: Vec<u8>, user_id: Uuid) -> Self {
-        let extension = file_name.rsplit('.').next().unwrap_or("").to_lowercase();
+    pub fn new(
+        title: String,
+        file_name: Option<String>,
+        file_data: Vec<u8>,
+        user_id: Uuid,
+        tags: Vec<String>,
+        content: Option<String>,
+        issued_date: Option<NaiveDateTime>,
+        expire_date: Option<NaiveDateTime>,
+    ) -> Self {
+        let extension = match &file_name {
+            Some(name) => name.split('.').last().map(|s| s.to_string()),
+            None => None,
+        };
         UploadedDocumentInput {
+            title,
             file_name,
             file_data,
             extension,
             user_id,
+            tags,
+            content,
+            issued_date,
+            expire_date,
         }
     }
 
     pub fn is_pdf(&self) -> bool {
-        self.file_name.to_lowercase().ends_with(".pdf")
+        match &self.file_name {
+            Some(name) => name.to_lowercase().ends_with(".pdf"),
+            None => false,
+        }
     }
 }
 

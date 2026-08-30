@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::application::delete_document_command::DeleteDocumentCommand;
 use crate::application::get_documents_query::{GetDocumentsQuery, GetDocumentsTitleCursorQuery};
+use crate::application::update_document_command::UpdateDocumentCommand;
 use crate::domain::document::Document;
 use crate::domain::uploaded_document_input::UploadedDocumentInput;
 use crate::infrastructure::document::document_api_types::{
@@ -15,12 +16,19 @@ use axum::response::IntoResponse;
 use axum::{Json, http::StatusCode};
 use backend_utils::AppResponse;
 use backend_utils::app_result::ApiResult;
+use serde::de::DeserializeOwned;
 use serde_json::json;
 use uuid::Uuid;
 
 use super::document_dto::DocumentDto;
 
 const PAGE_LIMIT: u32 = 100;
+
+struct ParsedUpdateDocumentMultipart<T> {
+    json_data: Option<T>,
+    file_data: Vec<u8>,
+    file_name: String,
+}
 
 /**
 * Loads a document by ID and checks if it belongs to the specified user.
@@ -263,15 +271,54 @@ pub async fn update_document(
     }: AuthUser,
     State(DocumentState(document_use_cases)): State<DocumentState>,
     Path(id): Path<Uuid>,
-    mut multipart: Multipart,
+    multipart: Multipart,
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Received multipart update for document ID: {}", id);
     let repo = document_use_cases.document_repository.clone();
-    let Some(existing) = &repo.load_owned_document(&id, &user_id).await else {
-        return AppResponse::not_found();
-    };
 
-    let mut json_data: Option<UpdateDocumentCommandDto> = None;
+    let ParsedUpdateDocumentMultipart::<UpdateDocumentCommandDto> {
+        json_data,
+        file_data,
+        file_name,
+    } = parsed_document_multipart::<UpdateDocumentCommandDto>(multipart).await;
+
+    if let Some(payload) = json_data {
+        let uploaded_document_input = UploadedDocumentInput::new(
+            payload.title.clone(),
+            if file_name.len() > 0 {
+                Some(file_name)
+            } else {
+                None
+            },
+            file_data,
+            user_id,
+            payload.tags,
+            Some(payload.content.clone()),
+            payload.issued_date,
+            payload.expire_date,
+        );
+
+        let document = UpdateDocumentCommand::new(
+            id,
+            uploaded_document_input,
+            repo,
+            document_use_cases.reader.clone(),
+            document_use_cases.summarizer.clone(),
+        )
+        .execute()
+        .await?;
+        AppResponse::ok(DocumentDto::from_document(&document))
+    } else {
+        let err_msg = "No valid JSON data found in the multipart form";
+        tracing::warn!(err_msg);
+        AppResponse::validation_error(err_msg)
+    }
+}
+
+async fn parsed_document_multipart<T: DeserializeOwned>(
+    mut multipart: Multipart,
+) -> ParsedUpdateDocumentMultipart<T> {
+    let mut json_data: Option<T> = None;
     let mut file_data = Vec::new();
     let mut file_name = String::new();
 
@@ -292,63 +339,10 @@ pub async fn update_document(
             _ => {}
         }
     }
-
-    if let Some(payload) = json_data {
-        let has_file = !file_data.is_empty();
-        let document_opt = match has_file {
-            true => {
-                let reader = document_use_cases.reader.clone();
-                let summarizer = document_use_cases.summarizer.clone();
-                let uploaded_document_input =
-                    UploadedDocumentInput::new(file_name, file_data, user_id);
-                Document::from_file(&uploaded_document_input, reader, summarizer)
-                    .await
-                    .map(|ocr_doc| Document::with_preserved_identity_from(existing, ocr_doc))
-            }
-            false => {
-                let mut document: Document = existing.clone();
-                document.apply_metadata_update(
-                    &payload.title,
-                    &payload.content,
-                    normalize_tag_names(&payload.tags),
-                    payload.issued_date,
-                    payload.expire_date,
-                );
-                Some(document)
-            }
-        };
-
-        let mut document = match document_opt {
-            Some(doc) => doc,
-            None => {
-                let err_msg = "Failed to create document from file data";
-                tracing::error!(err_msg);
-                return AppResponse::internal_error_from_msg(err_msg);
-            }
-        };
-
-        if has_file {
-            document.tags = normalize_tag_names(&payload.tags);
-            document.issued_date = payload.issued_date;
-            document.expire_date = payload.expire_date;
-        }
-
-        document.print_details();
-
-        match repo.update_document(document).await {
-            Err(e) => {
-                tracing::error!("Error updating document: {}", e);
-                AppResponse::internal_error(e)
-            }
-            Ok(saved_doc) => {
-                tracing::info!("Document updated: {:?}", saved_doc.title);
-                AppResponse::ok(DocumentDto::from_document(&saved_doc))
-            }
-        }
-    } else {
-        let err_msg = "No valid JSON data found in the multipart form";
-        tracing::warn!(err_msg);
-        AppResponse::validation_error(err_msg)
+    ParsedUpdateDocumentMultipart {
+        json_data,
+        file_data,
+        file_name,
     }
 }
 
@@ -503,7 +497,7 @@ mod tests {
             Err(Box::new(std::io::Error::other("delete failed")))
         }
 
-        async fn load_owned_document(&self, id: &Uuid, _user_id: &Uuid) -> Option<Document> {
+        async fn load_owned_document(&self, id: &Uuid, _user_id: Uuid) -> Option<Document> {
             self.get_document(id).await
         }
     }
