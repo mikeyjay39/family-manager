@@ -17,7 +17,7 @@ pub struct Document {
     pub id: Uuid,
     pub title: String,
     pub content: String,
-    pub tags: Vec<String>,
+    tags: Vec<String>,
     pub user_id: Uuid,
     pub created_at: NaiveDateTime,
     pub issued_date: Option<NaiveDateTime>,
@@ -25,6 +25,18 @@ pub struct Document {
     pub storage: Option<DocumentStorageRef>,
 }
 
+/// Trims whitespace, lowercases, skips empty strings, and dedupes (first-seen order).
+fn normalize_tag_names(tags: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for tag in tags {
+        let name = tag.trim().to_lowercase();
+        if name.is_empty() || normalized.contains(&name) {
+            continue;
+        }
+        normalized.push(name);
+    }
+    normalized
+}
 impl Document {
     /// Creates a new document with an auto-generated UUID
     pub fn new(title: &str, content: &str, user_id: Uuid) -> Self {
@@ -57,7 +69,7 @@ impl Document {
             id,
             title: title.to_string(),
             content: String::from(content),
-            tags,
+            tags: normalize_tag_names(&tags),
             user_id,
             created_at,
             issued_date,
@@ -67,15 +79,28 @@ impl Document {
     }
 
     /// Creates a document with metadata and optional external storage reference.
-    pub fn new_with_storage(
-        title: &str,
-        content: &str,
-        user_id: Uuid,
-        storage: Option<DocumentStorageRef>,
-    ) -> Self {
-        let mut document = Self::new(title, content, user_id);
-        document.storage = storage;
-        document
+    pub fn from_uploaded_input(uploaded_document_input: UploadedDocumentInput) -> Self {
+        let UploadedDocumentInput {
+            title,
+            content,
+            user_id,
+            tags,
+            issued_date,
+            expire_date,
+            storage,
+            ..
+        } = uploaded_document_input;
+        Self::with_id(
+            Uuid::new_v4(),
+            &title,
+            content.as_deref().unwrap_or(""),
+            user_id,
+            tags,
+            Utc::now().naive_utc(),
+            issued_date,
+            expire_date,
+            storage,
+        )
     }
 
     /**
@@ -110,12 +135,12 @@ impl Document {
             id: Uuid::new_v4(),
             title,
             content: summary,
-            tags: uploaded_document_input.tags,
+            tags: normalize_tag_names(&uploaded_document_input.tags),
             user_id: uploaded_document_input.user_id,
             created_at: Utc::now().naive_utc(),
-            issued_date: None,
-            expire_date: None,
-            storage: None,
+            issued_date: uploaded_document_input.issued_date,
+            expire_date: uploaded_document_input.expire_date,
+            storage: uploaded_document_input.storage,
         };
         Some(document)
     }
@@ -161,9 +186,17 @@ impl Document {
     ) {
         self.title = title.to_string();
         self.content = content.to_string();
-        self.tags = tags;
+        self.tags = normalize_tag_names(tags);
         self.issued_date = issued_date;
         self.expire_date = expire_date;
+    }
+
+    pub fn get_tags(&self) -> &Vec<String> {
+        &self.tags
+    }
+
+    pub fn set_tags(&mut self, tags: &Vec<String>) {
+        self.tags = normalize_tag_names(tags);
     }
 }
 

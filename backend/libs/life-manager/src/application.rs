@@ -1,3 +1,4 @@
+pub mod create_document_command;
 pub mod delete_document_command;
 pub mod document_repository;
 pub mod document_use_cases;

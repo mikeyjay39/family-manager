@@ -8,4 +8,5 @@ pub mod document_router;
 pub mod document_state;
 pub mod document_tag_entity;
 pub mod document_tags;
+pub mod mappers;
 pub mod tag_entity;

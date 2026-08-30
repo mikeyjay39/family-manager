@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::application::create_document_command::CreateDocumentCommand;
 use crate::application::delete_document_command::DeleteDocumentCommand;
 use crate::application::get_documents_query::{GetDocumentsQuery, GetDocumentsTitleCursorQuery};
 use crate::application::update_document_command::UpdateDocumentCommand;
@@ -9,7 +10,7 @@ use crate::infrastructure::document::document_api_types::{
     CreateDocumentCommandDto, GetDocumentsQueryParams, UpdateDocumentCommandDto,
 };
 use crate::infrastructure::document::document_state::DocumentState;
-use crate::infrastructure::document::document_tags::normalize_tag_names;
+use crate::infrastructure::document::mappers::from_create_to_uploaded_document_input;
 use auth::AuthUser;
 use axum::extract::{Multipart, Path, Query, State};
 use axum::response::IntoResponse;
@@ -59,69 +60,27 @@ pub async fn create_document(
         tenant: _tenant,
     }: AuthUser,
     State(DocumentState(document_use_cases)): State<DocumentState>,
-    mut multipart: Multipart,
+    multipart: Multipart,
 ) -> ApiResult<DocumentDto> {
     tracing::info!("Received multipart form data");
-    let mut json_data: Option<CreateDocumentCommandDto> = None;
-    let mut file_data = Vec::new();
-    let mut file_name = String::new();
-
-    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
-        match field.name() {
-            Some("json") => {
-                let text = field.text().await.unwrap();
-                json_data = serde_json::from_str(&text).ok();
-            }
-            Some("file") => {
-                tracing::info!("Processing file field");
-                if let Some(name) = field.file_name() {
-                    file_name = name.to_string();
-                }
-                file_data = field.bytes().await.unwrap().to_vec();
-                tracing::info!("Received file: {}", file_name);
-            }
-            _ => {}
-        }
-    }
+    let ParsedUpdateDocumentMultipart::<CreateDocumentCommandDto> {
+        json_data,
+        file_data,
+        file_name,
+    } = parse_document_multipart::<CreateDocumentCommandDto>(multipart).await;
 
     if let Some(payload) = json_data {
-        let document_opt = match !file_data.is_empty() {
-            true => {
-                let reader = document_use_cases.reader.clone();
-                let summarizer = document_use_cases.summarizer.clone();
-                let uploaded_document_input =
-                    UploadedDocumentInput::new(file_name, file_data, user_id);
-                Document::from_file(&uploaded_document_input, reader, summarizer).await
-            }
-            false => Some(Document::new(&payload.title, &payload.content, user_id)),
-        };
-
-        let mut document = match document_opt {
-            Some(doc) => doc,
-            None => {
-                let err_msg = "Failed to create document from file data";
-                tracing::error!(err_msg);
-                return AppResponse::internal_error_from_msg(err_msg);
-            }
-        };
-
-        document.tags = normalize_tag_names(&payload.tags);
-        document.issued_date = payload.issued_date;
-        document.expire_date = payload.expire_date;
-        document.print_details();
-
-        let repo = document_use_cases.document_repository.clone();
-        let saved_doc_res = repo.save_document(document).await;
-        match saved_doc_res {
-            Err(e) => {
-                tracing::error!("Error saving document: {}", e);
-                AppResponse::internal_error(e)
-            }
-            Ok(saved_doc) => {
-                tracing::info!("Document saved: {:?}", saved_doc.title);
-                AppResponse::created(DocumentDto::from_document(&saved_doc))
-            }
-        }
+        let uploaded_document_input =
+            from_create_to_uploaded_document_input(payload, user_id, Some(file_name), file_data)?;
+        let document = CreateDocumentCommand::new(
+            uploaded_document_input,
+            document_use_cases.document_repository.clone(),
+            document_use_cases.reader.clone(),
+            document_use_cases.summarizer.clone(),
+        )
+        .execute()
+        .await?;
+        AppResponse::ok(DocumentDto::from_document(&document))
     } else {
         let err_msg = "No valid JSON data found in the multipart form";
         tracing::warn!(err_msg);
@@ -143,20 +102,14 @@ pub async fn create_document_json(
     State(DocumentState(document_use_cases)): State<DocumentState>,
     Json(payload): Json<CreateDocumentCommandDto>,
 ) -> ApiResult<DocumentDto> {
-    let storage = match payload.storage {
-        Some(storage) => storage.into_domain()?,
-        None => {
-            return AppResponse::validation_error(
-                "JSON document create requires storage metadata; use multipart POST /documents for file uploads",
-            );
-        }
-    };
+    tracing::info!("Creating document from JSON with title: {}", payload.title);
 
-    let mut document =
-        Document::new_with_storage(&payload.title, &payload.content, user_id, Some(storage));
-    document.tags = normalize_tag_names(&payload.tags);
-    document.issued_date = payload.issued_date;
-    document.expire_date = payload.expire_date;
+    let document = Document::from_uploaded_input(from_create_to_uploaded_document_input(
+        payload,
+        user_id,
+        None,
+        Vec::new(),
+    )?);
     document.print_details();
 
     let repo = document_use_cases.document_repository.clone();
@@ -249,7 +202,7 @@ pub async fn update_document_json(
     );
 
     AppResponse::ok(DocumentDto::from_document(
-        &UpdateDocumentCommand::execute(&update_document_command).await?,
+        &UpdateDocumentCommand::execute(update_document_command).await?,
     ))
 }
 

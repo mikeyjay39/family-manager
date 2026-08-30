@@ -36,7 +36,7 @@ impl UpdateDocumentCommand {
         }
     }
 
-    pub async fn execute(&self) -> AppResult<Document> {
+    pub async fn execute(self) -> AppResult<Document> {
         tracing::info!(
             "Received multipart update for document ID: {}",
             self.document_id
@@ -66,7 +66,7 @@ impl UpdateDocumentCommand {
                     .content
                     .as_deref()
                     .unwrap_or(""),
-                normalize_tag_names(&self.uploaded_document_input.tags),
+                self.uploaded_document_input.tags,
                 self.uploaded_document_input.issued_date,
                 self.uploaded_document_input.expire_date,
             );
@@ -95,17 +95,4 @@ impl UpdateDocumentCommand {
             }
         }
     }
-}
-
-/// Trims whitespace, lowercases, skips empty strings, and dedupes (first-seen order).
-fn normalize_tag_names(tags: &[String]) -> Vec<String> {
-    let mut normalized = Vec::new();
-    for tag in tags {
-        let name = tag.trim().to_lowercase();
-        if name.is_empty() || normalized.contains(&name) {
-            continue;
-        }
-        normalized.push(name);
-    }
-    normalized
 }
