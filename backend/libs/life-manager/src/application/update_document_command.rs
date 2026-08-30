@@ -51,9 +51,9 @@ impl UpdateDocumentCommand {
 
         let document_opt: Option<Document> = if self.uploaded_document_input.file_data.len() > 0 {
             Document::from_file(
-                self.uploaded_document_input.copy(),
-                self.reader,
-                self.summarizer,
+                self.uploaded_document_input.clone(),
+                &self.reader,
+                &self.summarizer,
             )
             .await
             .map(|ocr_doc| Document::with_preserved_identity_from(&existing, ocr_doc))
@@ -64,7 +64,8 @@ impl UpdateDocumentCommand {
                 &self
                     .uploaded_document_input
                     .content
-                    .unwrap_or("".to_string()),
+                    .as_deref()
+                    .unwrap_or(""),
                 normalize_tag_names(&self.uploaded_document_input.tags),
                 self.uploaded_document_input.issued_date,
                 self.uploaded_document_input.expire_date,
@@ -72,7 +73,7 @@ impl UpdateDocumentCommand {
             Some(document)
         };
 
-        let mut document = match document_opt {
+        let document = match document_opt {
             Some(doc) => doc,
             None => {
                 let err_msg = "Failed to create document from file data";
